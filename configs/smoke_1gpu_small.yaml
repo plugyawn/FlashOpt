@@ -1,0 +1,41 @@
+# =============================================================================
+# RandOpt Speedrun — SMOKE TEST (single small GPU)
+# Exercises the full pipeline end-to-end on a 1-3B model so we can validate the
+# Triton kernel + reconstruct/switch + FineWeb bpb + record log on real hardware
+# cheaply. NOT a standard; just a correctness/throughput smoke.
+# =============================================================================
+name: smoke_1gpu_small
+
+hardware:
+  gpus: 1
+  gpu: "any"
+  nodes: 1
+
+model: Qwen/Qwen2.5-1.5B-Instruct
+precision: bfloat16
+
+tensor_parallel_size: 1
+num_engines: 1                  # auto-reduced to fit available GPUs
+gpu_memory_utilization: 0.60    # 1.5B is tiny; base copy is ~3GB
+enforce_eager: true             # keep the smoke simple/robust; flip to test cudagraphs
+noise: rademacher
+kernel: auto
+
+dataset: gsm8k
+train_data_path: data/gsm8k/train.parquet
+test_data_path: data/gsm8k/test.parquet
+train_samples: 32
+test_samples: 32
+max_tokens: 256
+population_size: 16
+sigma_values: [0.001, 0.002]
+top_k_ratios: [0.25]            # ensemble best 4 of 16
+global_seed: 42
+
+fineweb:
+  path: eval/fineweb_heldout.jsonl
+  max_len: 1024
+  max_chunks: 16
+  ensemble: true
+  build_if_missing: true        # build a tiny held-out slice on the pod if absent
+  build_num_docs: 32

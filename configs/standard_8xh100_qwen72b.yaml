@@ -1,0 +1,60 @@
+# =============================================================================
+# RandOpt Speedrun — THE STANDARD
+# 8x H100-80GB (single node) x Qwen2.5-72B-Instruct
+#
+# Fixed hardware + model + protocol so wall-clock / seeds-per-second numbers are
+# comparable across submissions (nanoGPT-speedrun style). Quality is reported as
+# ensemble task accuracy AND held-out FineWeb bits-per-byte.
+# =============================================================================
+name: standard_8xh100_qwen72b
+
+# ---- hardware (the fixed standard; for the record log / sanity check) -------
+hardware:
+  gpus: 8
+  gpu: "H100-80GB"
+  nodes: 1
+
+# ---- model ------------------------------------------------------------------
+model: Qwen/Qwen2.5-72B-Instruct
+precision: bfloat16
+
+# ---- engine topology --------------------------------------------------------
+# 72B bf16 = 144 GB weights. With a resident base copy (drift-free reconstruction)
+# that is 2x = 288 GB. Across 8 GPUs at TP=8 -> 36 GB/GPU (18 weights + 18 base),
+# leaving ~44 GB/GPU for KV. This gives ONE engine: seeds are evaluated serially,
+# but each seed's inference uses all 8 GPUs and the weight switch is a single
+# fused pass. To get data-parallel-over-seeds you need more nodes (16 GPUs ->
+# TP=8 x 2 engines) or a smaller model.  (Memory-constrained alternative: set
+# noise switching to the in-place delta path and drop the base copy for TP=4 x
+# 2 engines, at the cost of bf16 drift — see docs/SPEEDRUN.md.)
+tensor_parallel_size: 8
+num_engines: 1
+gpu_memory_utilization: 0.70    # MUST leave (1-util)*80GB >= per-GPU base shard (~18GB)
+enforce_eager: false            # capture CUDA graphs for inference throughput;
+                                # set true if a given vLLM build is unstable with
+                                # in-place weight reconstruction.
+
+# ---- perturbation -----------------------------------------------------------
+noise: rademacher               # dense +/-1; fused, materialisation-free switch
+kernel: auto                    # -> triton on CUDA
+
+# ---- selection task (RandOpt-native objective) ------------------------------
+dataset: gsm8k
+train_data_path: data/gsm8k/train.parquet
+test_data_path: data/gsm8k/test.parquet
+train_samples: 200              # perturbations scored on this many train prompts
+test_samples: 200
+max_tokens: 1024
+population_size: 512            # part of the standard; raise for stronger ensembles
+sigma_values: [0.0005, 0.001, 0.002]
+top_k_ratios: [0.04, 0.1]       # ensemble the best 4% and 10% of the population
+global_seed: 42
+
+# ---- held-out FineWeb bpb (reported metric, nanoGPT-style) ------------------
+fineweb:
+  path: eval/fineweb_heldout.jsonl
+  max_len: 2048
+  max_chunks: 256               # cap work; ~enough for a stable bpb estimate
+  ensemble: true                # also report prob-averaged ensemble bpb
+  build_if_missing: false       # build the fixed slice ahead of time (recorded sha)
+  build_num_docs: 256
