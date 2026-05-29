@@ -35,6 +35,11 @@ e2e_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install("vllm", "ray", "pandas", "pyarrow", "datasets", "transformers",
                  "huggingface-hub", "pyyaml", "numpy")
+    # debian_slim has no CUDA toolkit (nvcc); vLLM's default FlashInfer sampler
+    # JIT-compiles a kernel at runtime and needs nvcc. Route sampling to the
+    # native PyTorch top-k/top-p path instead (greedy decode is unaffected).
+    .env({"VLLM_USE_FLASHINFER_SAMPLER": "0",
+          "VLLM_ENABLE_V1_MULTIPROCESSING": "0"})
     .add_local_dir(REPO, "/root/RandOpt", ignore=IGNORE)
 )
 
@@ -128,12 +133,14 @@ def main(tier: str = "1"):
             print(f"  n={r['n']:>12,}  old(perturb+restore)={r['old_ms']:7.2f}ms  "
                   f"fused reconstruct={r['new_ms']:7.2f}ms  speedup={r['speedup']:.2f}x")
         return
-    res = kernel_test.remote()
-    print("\n================ KERNEL RESULT ================")
-    print(json.dumps({k: v for k, v in res.items() if k != "pytest_tail"}, indent=2))
-    print(res.get("pytest_tail", ""))
-    if res.get("returncode") != 0:
-        print("!! kernel test FAILED")
+    # tier "2" runs ONLY the e2e (kernel already validated); "1"/"all" run kernel.
+    if tier != "2":
+        res = kernel_test.remote()
+        print("\n================ KERNEL RESULT ================")
+        print(json.dumps({k: v for k, v in res.items() if k != "pytest_tail"}, indent=2))
+        print(res.get("pytest_tail", ""))
+        if res.get("returncode") != 0:
+            print("!! kernel test FAILED")
     if tier in ("2", "all"):
         res2 = e2e_smoke.remote()
         print("\n================ E2E RESULT ================")
