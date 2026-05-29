@@ -1,0 +1,22 @@
+{
+  "kind": "gpu_kernel_validation",
+  "date": "2026-05-30",
+  "via": "modal (serverless L4)",
+  "device": "NVIDIA L4",
+  "stack": "torch=2.12.0+cu130, triton=3.7.0, cuda=True",
+  "kernel_tests": {
+    "suite": "tests/test_kernel_gpu.py",
+    "result": "7 passed",
+    "checks": [
+      "triton == torch reference BIT-FOR-BIT (fp32, bf16, fp16)",
+      "GPU triton signs == CPU torch reference signs",
+      "switch_inplace == reconstruct (fp32)",
+      "reconstruct drift-free across seed switches (bf16)"
+    ]
+  },
+  "throughput_fused_vs_perturb_restore": [
+    {"n": 50000000, "old_ms": 5.17, "new_ms": 0.91, "speedup": 5.69},
+    {"n": 200000000, "old_ms": 20.66, "new_ms": 3.46, "speedup": 5.97}
+  ],
+  "notes": "Measured (modal run scripts/modal_smoke.py --tier throughput). 'old' is upstream's 2x-randn perturb+restore only; the real runtime also eliminates per-call empty_cache/synchronize and the entire restore pass, so the end-to-end switch saving is larger. Caught+fixed a real bug here: Triton @jit cannot read module-level Python globals (_C1/_C2) -> inlined the murmur3 constants."
+}

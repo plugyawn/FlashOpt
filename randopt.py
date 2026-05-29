@@ -347,11 +347,14 @@ def main(args):
     print(f"Model: {args.model_name}")
     print(f"Population: {args.population_size} | Top-K: {args.top_k_list} | Engines: {args.num_engines} | TP: {args.tp}")
     
-    # Ray setup
+    # Ray setup. Propagate the repo root to Ray workers so vLLM can import the
+    # worker_extension_cls (utils.worker_extn -> core.perturb) on every worker.
+    _repo_root = os.path.dirname(os.path.abspath(__file__))
+    _rt = {"env_vars": {"PYTHONPATH": _repo_root + os.pathsep + os.environ.get("PYTHONPATH", "")}}
     if os.environ.get("RAY_ADDRESS"):
-        ray.init(address="auto", ignore_reinit_error=True)
+        ray.init(address="auto", ignore_reinit_error=True, runtime_env=_rt)
     else:
-        ray.init(address="local", ignore_reinit_error=True)
+        ray.init(address="local", ignore_reinit_error=True, runtime_env=_rt)
     
     if is_resume:
         # Resume mode: load saved seeds

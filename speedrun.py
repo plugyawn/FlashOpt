@@ -210,10 +210,13 @@ def main(cfg: Dict[str, Any], run_dir: str):
     handler = get_dataset_handler(args.dataset)
     max_tokens = args.max_tokens or handler.default_max_tokens
 
+    # Propagate the repo root to Ray workers so vLLM can import the
+    # worker_extension_cls (utils.worker_extn -> core.perturb) on every worker.
+    _rt = {"env_vars": {"PYTHONPATH": REPO + os.pathsep + os.environ.get("PYTHONPATH", "")}}
     if os.environ.get("RAY_ADDRESS"):
-        ray.init(address="auto", ignore_reinit_error=True)
+        ray.init(address="auto", ignore_reinit_error=True, runtime_env=_rt)
     else:
-        ray.init(address="local", ignore_reinit_error=True)
+        ray.init(address="local", ignore_reinit_error=True, runtime_env=_rt)
 
     # ---- data + prompts ----
     train_datas, test_datas = randopt.load_data(handler, args)
