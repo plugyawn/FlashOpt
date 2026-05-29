@@ -13,10 +13,26 @@ INSTRUCTION = ("Solve the math problem. Reason step by step, then give the final
                "answer on its own line as: #### <number>")
 
 
+def _load_split(split, retries=5):
+    """Load a GSM8K split, retrying through transient HF Hub errors (e.g. 504)."""
+    import time as _t
+    from datasets import load_dataset
+    last = None
+    for attempt in range(retries):
+        try:
+            return load_dataset("openai/gsm8k", "main", split=split)
+        except Exception as e:  # HfHubHTTPError, ConnectionError, etc.
+            last = e
+            wait = 3 * (attempt + 1)
+            print(f"  [make_gsm8k] {split} load failed ({type(e).__name__}); "
+                  f"retry {attempt+1}/{retries} in {wait}s")
+            _t.sleep(wait)
+    raise RuntimeError(f"failed to load gsm8k {split} after {retries} retries: {last}")
+
+
 def build(split, n):
     import pandas as pd  # noqa
-    from datasets import load_dataset
-    ds = load_dataset("openai/gsm8k", "main", split=split)
+    ds = _load_split(split)
     n = min(n, len(ds))
     rows = []
     for ex in ds.select(range(n)):
