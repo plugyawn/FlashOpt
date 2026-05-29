@@ -16,6 +16,10 @@ randopt-experiment*/
 speedrun-runs/
 *.records.jsonl
 
+# Local virtualenv (CPU test env)
+.venv/
+.pytest_cache/
+
  *.pyc
  *.pth
  *.pt

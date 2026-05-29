@@ -1,10 +1,19 @@
 import gc
 import time
 import random
+import sys
 import numpy as np
 import torch
 import os
 import inspect
+
+# Make the repo root importable on the vLLM worker so `core.perturb` resolves
+# regardless of the worker process cwd.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+from core import perturb  # fused dense-Rademacher reconstruct/switch
+
 try:
     from vllm.forward_context import set_forward_context
 except ImportError:
@@ -19,20 +28,23 @@ def _stateless_init_process_group(master_address, master_port, rank, world_size,
     return PyNcclCommunicator(pg, device=device)
 
 class WorkerExtension:
-    """
-    Methods used by the ES trainer:
-    - perturb_self_weights(seed, sigma_or_scale, coeff=1.0, negate=False)
-    - restore_self_weights(seed, SIGMA)
-    - update_weights_from_seeds(seeds, coeffs)  <-- NEW METHOD
-    - init_inter_engine_group(master_address, master_port, rank, world_size)
-    - broadcast_all_weights(src_rank)
-    - save_self_weights_to_disk(filepath)
-    
-    Ensemble methods:
-    - store_base_weights()
-    - apply_perturbation(seed, sigma)
-    - reset_to_base_weights()
-    - get_next_token_logits(input_ids)
+    """vLLM worker-side methods for RandOpt's fused dense-Rademacher switching.
+
+    Fast path (speedrun):
+    - configure_perturbation(noise, kernel)  -- set once at launch
+    - store_base_weights()                   -- resident base copy (1x model mem)
+    - perturb_self_weights(seed, sigma)      -- W = base + sigma*R(seed) (1 fused pass)
+    - restore_self_weights(...)              -- NO-OP (next perturb reconstructs from base)
+    - reset_to_base_weights()                -- force W = base
+
+    Ensemble:
+    - apply_perturbation(seed, sigma)        -- same fused reconstruct
+    - apply_averaged_perturbations(seeds_sigmas, weights)
+
+    Other / legacy:
+    - switch_to_seed(seed_from, seed_to, sigma)  -- in-place delta switch (no-base regime)
+    - update_weights_from_seeds(...)         -- legacy ES weight update (Gaussian)
+    - init_inter_engine_group / broadcast_all_weights / save_self_weights_to_disk
     """
     
     def cleanup_gpu_memory(self):
@@ -66,37 +78,56 @@ class WorkerExtension:
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
-    def perturb_self_weights(self, seed, noise_scale, negate=False):
-        self._set_seed(seed)
-        scale = float(noise_scale)
-        sign = -1.0 if negate else 1.0
-        for name, p in self.model_runner.model.named_parameters():
-            gen = torch.Generator(device=p.device)
-            gen.manual_seed(int(seed))
-            noise = torch.randn(p.shape, dtype=p.dtype, device=p.device, generator=gen)
-            if self._should_perturb(name):
-                p.data.add_(sign * scale * noise)
-            del noise
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-        torch.cuda.empty_cache()
+    # ---- perturbation config (set by core.engine.launch_engines) ----------
+    def configure_perturbation(self, noise: str = "rademacher", kernel: str = None):
+        """Set the noise type ('rademacher'|'gaussian') and kernel backend
+        ('auto'|'triton'|'torch', or None=auto/env). Called once at launch."""
+        self._noise = noise
+        self._kernel = kernel
         return True
 
-    def restore_self_weights(self, seed, SIGMA, negate=False):
-        """Undo perturbation. Must use same negate value as perturb_self_weights."""
-        self._set_seed(seed)
-        sign = -1.0 if negate else 1.0  # Same sign as perturb
-        for name, p in self.model_runner.model.named_parameters():
-            gen = torch.Generator(device=p.device)
-            gen.manual_seed(int(seed))
-            noise = torch.randn(p.shape, dtype=p.dtype, device=p.device, generator=gen)
-            if self._should_perturb(name):
-                # Undo: subtract what we added (sign * sigma * noise)
-                p.data.add_(-sign * float(SIGMA) * noise)
-            del noise
+    def _reconstruct(self, seed, sigma):
+        """Set every perturbable param to base + sigma*R(seed, .) in ONE fused
+        pass (no noise materialised on the Triton path). One synchronize at the
+        end — no per-parameter empty_cache/synchronize churn."""
+        if not hasattr(self, "_base_weights"):
+            self.store_base_weights()
+        perturb.reconstruct_model_from_base(
+            self.model_runner.model.named_parameters(),
+            lambda n: self._base_weights[n],
+            int(seed), float(sigma), self._should_perturb,
+            noise=getattr(self, "_noise", "rademacher"),
+            kernel=getattr(self, "_kernel", None),
+        )
         if torch.cuda.is_available():
             torch.cuda.synchronize()
-        torch.cuda.empty_cache()
+        return True
+
+    def perturb_self_weights(self, seed, noise_scale, negate=False):
+        """Reconstruct W = base + sigma*R(seed) absolutely from the resident base
+        (drift-free). Replaces the old materialise-randn-and-add. `negate` flips
+        the sign of the perturbation (antithetic), realised as -sigma."""
+        sigma = -float(noise_scale) if negate else float(noise_scale)
+        return self._reconstruct(seed, sigma)
+
+    def restore_self_weights(self, seed, SIGMA, negate=False):
+        """No-op. With absolute reconstruction the next perturb_self_weights()
+        rebuilds the live weights from the resident base, so a dedicated restore
+        pass is unnecessary (this is the headline speedup: no second full pass,
+        no extra RNG). Call reset_to_base_weights() to force base now."""
+        return True
+
+    def switch_to_seed(self, seed_from, seed_to, sigma):
+        """In-place delta switch live += sigma*(R(seed_to)-R(seed_from)).
+        Drift-prone over many hops; for the memory-constrained / no-base regime
+        only. Prefer perturb_self_weights (absolute reconstruct) otherwise."""
+        perturb.switch_model(
+            self.model_runner.model.named_parameters(),
+            int(seed_from), int(seed_to), float(sigma), self._should_perturb,
+            kernel=getattr(self, "_kernel", None),
+        )
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
         return True
 
     def update_weights_from_seeds(self, seeds, coeffs, alpha, population_size):
@@ -222,25 +253,11 @@ class WorkerExtension:
         return True
     
     def apply_perturbation(self, seed, sigma):
-        """Apply perturbation from base weights (not current weights)."""
+        """Apply perturbation from base weights (ensemble path). Identical to
+        perturb_self_weights now — a single fused reconstruct from base."""
         if not hasattr(self, '_base_weights'):
             raise RuntimeError("Must call store_base_weights first")
-        
-        self._set_seed(seed)
-        for name, p in self.model_runner.model.named_parameters():
-            # Restore base weights first
-            p.data.copy_(self._base_weights[name])
-            # Then apply perturbation (skip visual encoder)
-            gen = torch.Generator(device=p.device)
-            gen.manual_seed(int(seed))
-            noise = torch.randn(p.shape, dtype=p.dtype, device=p.device, generator=gen)
-            if self._should_perturb(name):
-                p.data.add_(float(sigma) * noise)
-            del noise
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-        torch.cuda.empty_cache()
-        return True
+        return self._reconstruct(seed, sigma)
     
     def reset_to_base_weights(self):
         """Reset model weights to stored base weights."""
@@ -282,42 +299,29 @@ class WorkerExtension:
             # Normalize weights
             total = sum(weights)
             weights = [w / total for w in weights]
-        
-        param_count = 0
+
+        # Non-perturbed params: ensure they equal base.
         for name, p in self.model_runner.model.named_parameters():
-            # Start with base weights
-            p.data.copy_(self._base_weights[name])
-            
-            if self._should_perturb(name):
-                # Accumulate weighted perturbations in float32 for precision
-                perturbation = torch.zeros_like(p.data, dtype=torch.float32)
-                
-                for (seed, sigma), weight in zip(seeds_sigmas, weights):
-                    gen = torch.Generator(device=p.device)
-                    gen.manual_seed(int(seed))
-                    noise = torch.randn(p.shape, dtype=p.dtype, device=p.device, generator=gen)
-                    
-                    # Convert to float32 and scale in-place
-                    noise_fp32 = noise.to(torch.float32)
-                    del noise  # Free original noise immediately
-                    
-                    noise_fp32.mul_(weight * float(sigma))
-                    perturbation.add_(noise_fp32)
-                    del noise_fp32  # Clean up immediately
-                
-                # Apply averaged perturbation
-                p.data.add_(perturbation.to(p.dtype))
-                del perturbation
-            
-            param_count += 1
-            
-            # Periodic cache clearing for large models
-            if param_count % 50 == 0:
-                torch.cuda.empty_cache()
-        
+            if not self._should_perturb(name):
+                p.data.copy_(self._base_weights[name])
+
+        # Perturbed params: W = base + sum_i (w_i * sigma_i) * R(seed_i), accumulated
+        # in fp32 for precision. Uses the same global-offset Rademacher stream as
+        # the reconstruct/switch kernels (so seeds match the sampling phase).
+        plan = perturb.iter_perturb_params(
+            self.model_runner.model.named_parameters(), self._should_perturb)
+        for name, p, off in plan:
+            base = self._base_weights[name]
+            acc = torch.zeros_like(p.data, dtype=torch.float32)
+            for (seed, sigma), weight in zip(seeds_sigmas, weights):
+                signs = perturb.rademacher_signs(
+                    int(seed), off, p.numel(), p.device, torch.float32).reshape(p.shape)
+                acc.add_(signs, alpha=float(weight) * float(sigma))
+            p.data.copy_((base.to(torch.float32) + acc).to(p.dtype))
+            del acc
+
         if torch.cuda.is_available():
             torch.cuda.synchronize()
-        torch.cuda.empty_cache()
         gc.collect()
         return True
     

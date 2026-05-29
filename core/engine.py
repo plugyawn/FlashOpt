@@ -16,9 +16,9 @@ class RandOptNcclLLM(LLM):
         super().__init__(*args, **kwargs)
 
 
-def launch_engines(num_engines: int, model_name: str, precision: str = "bfloat16", batch_size: int = 25, tensor_parallel_size: int = 1, enable_prefix_caching: bool = False, gpu_memory_utilization: float = 0.75, multimodal: bool = False):
+def launch_engines(num_engines: int, model_name: str, precision: str = "bfloat16", batch_size: int = 25, tensor_parallel_size: int = 1, enable_prefix_caching: bool = False, gpu_memory_utilization: float = 0.75, multimodal: bool = False, enforce_eager: bool = True, noise: str = "rademacher", kernel: str = "auto"):
     """Launch vLLM engines on Ray with batched initialization.
-    
+
     Args:
         num_engines: Number of engines to launch
         model_name: Path to model or HuggingFace model name
@@ -26,6 +26,16 @@ def launch_engines(num_engines: int, model_name: str, precision: str = "bfloat16
         batch_size: Number of engines to initialize per batch (reduces NFS contention)
         tensor_parallel_size: Number of GPUs per engine for tensor parallelism (for large models)
         multimodal: Whether to enable multimodal support (for VL models with images)
+        enforce_eager: If True, disable CUDA graphs (safe default). Set False to
+            capture CUDA graphs for faster inference — compatible with in-place
+            weight reconstruction (graphs reference weight storage by address),
+            but validate per vLLM version.
+        noise: Perturbation noise type ('rademacher' [fast default] | 'gaussian').
+        kernel: Fused-kernel backend ('auto' | 'triton' | 'torch').
+        gpu_memory_utilization: Fraction of GPU mem vLLM may use. IMPORTANT: the
+            resident base-weights copy (~1x model) is allocated *outside* vLLM's
+            budget after init, so leave headroom: (1-util)*mem >= per-GPU weight
+            shard. E.g. a 72B model TP=8 (~18GB/GPU) wants util<=0.7 on 80GB.
     
     Returns:
         Tuple of (engines list, placement groups list)
@@ -104,7 +114,7 @@ def launch_engines(num_engines: int, model_name: str, precision: str = "bfloat16
             worker_extension_cls="utils.worker_extn.WorkerExtension",
             dtype=precision,
             enable_prefix_caching=enable_prefix_caching,
-            enforce_eager=True,
+            enforce_eager=enforce_eager,
             gpu_memory_utilization=gpu_memory_utilization,
             disable_log_stats=True,
         )
@@ -118,9 +128,13 @@ def launch_engines(num_engines: int, model_name: str, precision: str = "bfloat16
             for strategy in batch_strategies
         ]
         
-        # Wait for batch to initialize
+        # Wait for batch to initialize, set perturbation config, then snapshot
+        # the pristine base weights (resident copy for drift-free reconstruction).
+        ray.get([e.collective_rpc.remote("configure_perturbation", args=(noise, kernel))
+                 for e in batch_engines])
         ray.get([e.collective_rpc.remote("store_base_weights", args=()) for e in batch_engines])
-        print(f"  Batch {batch_idx + 1} initialized in {time.time() - batch_start:.1f}s")
+        print(f"  Batch {batch_idx + 1} initialized in {time.time() - batch_start:.1f}s "
+              f"(noise={noise}, kernel={kernel}, enforce_eager={enforce_eager})")
         engines.extend(batch_engines)
     
     print(f"All {num_engines} engines launched in {time.time() - total_start:.1f}s")
