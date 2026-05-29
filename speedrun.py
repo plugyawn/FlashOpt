@@ -61,6 +61,11 @@ def derive_topk(population_size: int, top_k_ratios: List[float]) -> Tuple[List[i
 
 
 def git_commit() -> str:
+    # Allow callers (e.g. the Modal e2e where git isn't installed) to inject the
+    # host commit via env so the record's provenance is preserved.
+    env_commit = os.environ.get("RANDOPT_GIT_COMMIT")
+    if env_commit:
+        return env_commit
     try:
         return subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"], cwd=REPO, text=True,

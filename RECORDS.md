@@ -27,5 +27,30 @@ in `speedrun-runs/gpu_kernel_validation/record.json`:
   runtime additionally drops the per-call `empty_cache`/`synchronize` and the
   entire restore pass. Larger GPUs (H100) widen the gap (memory-bandwidth bound).
 
+## End-to-end smoke (GPU, measured)
+
+Full pipeline on **NVIDIA L4** via Modal (`modal run scripts/modal_smoke.py
+--tier 2`), config `configs/smoke_1gpu_small.yaml`, **Qwen2.5-1.5B-Instruct**,
+population 16, GSM8K (32 train / 32 test) — record in
+`speedrun-runs/modal_smoke/record.json`:
+
+| metric | base | ensemble (K=4) |
+|--------|-----:|---------------:|
+| GSM8K test accuracy | 28.1% (9/32) | **40.6% (13/32)**  (+12.5 pp) |
+| held-out FineWeb **bpb** (lower=better) | 0.2665 | 0.2678 |
+
+- **Ensemble lifts the task metric** by +12.5 pp — the majority vote over
+  fused-Rademacher-perturbed models works end-to-end through the fast runtime.
+- **FineWeb bpb is essentially flat** (ensemble marginally worse). Expected: at
+  this tiny scale (1.5B, only 16 seeds, σ∈{1e-3,2e-3}) selection optimizes GSM8K
+  reward, *not* language modeling, and held-out web text is far from the GSM8K
+  distribution — there is no reason a 16-seed task-selected ensemble should
+  improve generic LM bpb. The metric is wired through correctly; it simply
+  doesn't move at smoke scale. Whether the 72B standard moves bpb is the open
+  empirical question this harness exists to answer — not something to assume.
+- Throughput **0.19 seeds/s** (16 seeds in 83 s) on a single L4, `enforce_eager`,
+  greedy. This is a tiny smoke, not the 8×H100 standard.
+
 | date | commit | config | model | hardware | pop | seeds/s | base acc | ens acc | base bpb | ens bpb | total |
 |------|--------|--------|-------|----------|-----|---------|----------|---------|----------|---------|-------|
+| 2026-05-30 | bf6e80b | smoke_1gpu_small | Qwen2.5-1.5B-Instruct | 1×NVIDIA L4 | 16 | 0.19 | 28.1% | 40.6% | 0.267 | 0.268 | 472s |

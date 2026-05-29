@@ -109,10 +109,12 @@ def throughput():
 
 
 @app.function(gpu="L4", image=e2e_image, timeout=3600)
-def e2e_smoke():
+def e2e_smoke(git_commit: str = "unknown"):
     import os, sys, subprocess, glob, json
     os.chdir("/root/RandOpt")
-    env = dict(os.environ, PYTHONPATH="/root/RandOpt")
+    # git isn't installed in the container; pass the host commit through so the
+    # record's provenance is real.
+    env = dict(os.environ, PYTHONPATH="/root/RandOpt", RANDOPT_GIT_COMMIT=git_commit)
     subprocess.run([sys.executable, "scripts/make_gsm8k_smoke.py", "--n-train", "32", "--n-test", "32"],
                    check=True, env=env)
     r = subprocess.run([sys.executable, "speedrun.py", "--config", "configs/smoke_1gpu_small.yaml"],
@@ -142,7 +144,13 @@ def main(tier: str = "1"):
         if res.get("returncode") != 0:
             print("!! kernel test FAILED")
     if tier in ("2", "all"):
-        res2 = e2e_smoke.remote()
+        import subprocess
+        try:
+            commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"],
+                                             cwd=REPO, text=True).strip()
+        except Exception:
+            commit = "unknown"
+        res2 = e2e_smoke.remote(git_commit=commit)
         print("\n================ E2E RESULT ================")
         rec = res2.get("record") or {}
         print("returncode:", res2.get("returncode"))

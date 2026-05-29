@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-05-29T23:50:04+00:00",
+  "git_commit": "unknown",
+  "config_name": "smoke_1gpu_small",
+  "config_sha256": "cd359de9e6afa42d",
+  "hardware": {
+    "gpu": "NVIDIA L4",
+    "gpu_count": 1
+  },
+  "model": "Qwen/Qwen2.5-1.5B-Instruct",
+  "precision": "bfloat16",
+  "tensor_parallel_size": 1,
+  "num_engines": 1,
+  "enforce_eager": true,
+  "noise": "rademacher",
+  "kernel": "auto",
+  "dataset": "gsm8k",
+  "train_samples": 32,
+  "test_samples": 32,
+  "population_size": 16,
+  "sigma_values": [
+    0.001,
+    0.002
+  ],
+  "best_sigma": 0.001,
+  "timings_s": {
+    "launch": 91.322648402,
+    "base_eval": 10.775626814000006,
+    "sampling": 83.025059699,
+    "ensemble_eval": 21.49453373899999,
+    "fineweb": 256.883484718,
+    "total": 472.044712584
+  },
+  "seeds_per_sec": 0.19271289967157607,
+  "base_train_reward": 0.59375,
+  "base_test_accuracy": 0.28125,
+  "ensemble_accuracy": {
+    "4": 40.625
+  },
+  "best_ensemble_accuracy": 40.625,
+  "fineweb": {
+    "base": {
+      "bpb": 0.2665287456088745,
+      "nats_per_token": 2.2311942814631194,
+      "n_scored_tokens": 10279,
+      "n_bytes": 124142
+    },
+    "ensemble": {
+      "bpb": 0.26779305273404813,
+      "nats_per_token": 2.24177818610446,
+      "n_scored_tokens": 10279,
+      "n_bytes": 124142
+    },
+    "manifest_sha256": "0fa5169bf97b3005e405eb6bffbc47b6ffe5367c4fbb54876640069313e2202c"
+  },
+  "top_k_perturbs": [
+    [
+      942484267,
+      0.001
+    ],
+    [
+      1688060241,
+      0.002
+    ],
+    [
+      1540770719,
+      0.001
+    ],
+    [
+      1843824984,
+      0.001
+    ]
+  ]
+}
