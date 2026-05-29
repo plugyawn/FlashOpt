@@ -113,10 +113,13 @@ try:  # pragma: no cover - exercised on GPU only
 
     @triton.jit
     def _tl_fmix32(h):
+        # murmur3 fmix32; constants inlined as literals because Triton's JIT
+        # cannot access module-level Python globals (must be constexpr/literal).
+        # These MUST equal _C1/_C2 above so kernel == torch reference bit-for-bit.
         h = h ^ (h >> 16)
-        h = h * tl.full((), _C1, tl.uint32)
+        h = h * tl.full((), 0x85EBCA6B, tl.uint32)  # _C1
         h = h ^ (h >> 13)
-        h = h * tl.full((), _C2, tl.uint32)
+        h = h * tl.full((), 0xC2B2AE35, tl.uint32)  # _C2
         h = h ^ (h >> 16)
         return h
 
