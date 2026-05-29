@@ -1,0 +1,23 @@
+**/__pycache__/**
+**/logs/**
+**/wandb/**
+**/logs*/**
+
+*data_base/
+
+# Secrets — never commit (contains PRIME_API_KEY)
+env.local
+*.env
+.env*
+
+# Experiment / speedrun outputs
+es-experiment/
+randopt-experiment*/
+speedrun-runs/
+*.records.jsonl
+
+ *.pyc
+ *.pth
+ *.pt
+ *.pkl
+ *.whl
