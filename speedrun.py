@@ -324,7 +324,8 @@ def _run_fineweb(cfg, engines, tokenizer, top_k_perturbs):
     eng = engines[0]
 
     def gen(prompts, sampling_params, use_tqdm=False):
-        return ray.get(eng.generate.remote(prompts, sampling_params, use_tqdm))
+        # vLLM's LLM.generate has use_tqdm as keyword-only (cf. randopt.py).
+        return ray.get(eng.generate.remote(prompts, sampling_params, use_tqdm=use_tqdm))
 
     # base
     ray.get(eng.collective_rpc.remote("reset_to_base_weights", args=()))
