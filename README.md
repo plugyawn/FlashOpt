@@ -6,6 +6,31 @@
 [Paper](https://arxiv.org/pdf/2603.12228)          |         [Project Page](https://thickets.mit.edu)    |        Starting with a 1D Experiment: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1SsBrfQ-iFKuGElWjTNiFoX4dtMaCzCGy?usp=sharing)
 
 
+## ⚡ Speedrun (hypercharged runtime)
+
+Since RandOpt's cost is *seeds evaluated per second*, this fork adds a fast,
+principled runtime and a fixed standard to race the clock — nanoGPT-speedrun style.
+
+- **Fused dense-Rademacher switching** (`core/perturb.py`): `W = W₀ + σ·R(seed)`
+  reconstructed in a single Triton pass from a resident base copy. No noise tensor
+  materialized, no restore pass, no per-call cache churn — **2 full-model RNG
+  materializations per seed → 0**. Drift-free and bit-reproducible across backends.
+- **The standard**: 8×H100-80GB × `Qwen2.5-72B-Instruct`, GSM8K selection, with a
+  held-out **FineWeb bits-per-byte** quality metric (tokenizer-invariant).
+- **Records**: every run logs throughput (seeds/sec) + ensemble accuracy + FineWeb
+  bpb to [`RECORDS.md`](RECORDS.md).
+
+```bash
+# verify the math on CPU (no GPU needed)
+python -m pytest tests/test_perturb.py tests/test_worker.py tests/test_fineweb.py tests/test_speedrun.py -q
+# run the standard (on the 8×H100 node)
+python speedrun.py --config configs/standard_8xh100_qwen72b.yaml
+```
+
+Full methodology, the base-resident memory trade-off, and the honest "batching
+profiles" analysis are in **[docs/SPEEDRUN.md](docs/SPEEDRUN.md)**.
+
+
 ## Requirements
 
 ### Option1: Python / Conda

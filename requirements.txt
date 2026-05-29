@@ -8,3 +8,8 @@ ray[default]>=2.0.0
 pandas
 pyarrow
 tqdm
+pyyaml
+# Triton powers the fused dense-Rademacher switch kernel (core/perturb.py). It is
+# Linux+CUDA only and already a vLLM dependency there; pinned explicitly for clarity.
+# Off-GPU (e.g. macOS) the runtime auto-falls back to the pure-torch path.
+triton>=2.2.0; platform_system == "Linux"
