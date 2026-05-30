@@ -16,7 +16,7 @@ class RandOptNcclLLM(LLM):
         super().__init__(*args, **kwargs)
 
 
-def launch_engines(num_engines: int, model_name: str, precision: str = "bfloat16", batch_size: int = 25, tensor_parallel_size: int = 1, enable_prefix_caching: bool = False, gpu_memory_utilization: float = 0.75, multimodal: bool = False, enforce_eager: bool = True, noise: str = "rademacher", kernel: str = "auto"):
+def launch_engines(num_engines: int, model_name: str, precision: str = "bfloat16", batch_size: int = 25, tensor_parallel_size: int = 1, enable_prefix_caching: bool = False, gpu_memory_utilization: float = 0.75, multimodal: bool = False, enforce_eager: bool = True, noise: str = "rademacher", kernel: str = "auto", max_num_seqs: int = None, max_model_len: int = None):
     """Launch vLLM engines on Ray with batched initialization.
 
     Args:
@@ -32,6 +32,12 @@ def launch_engines(num_engines: int, model_name: str, precision: str = "bfloat16
             but validate per vLLM version.
         noise: Perturbation noise type ('rademacher' [fast default] | 'gaussian').
         kernel: Fused-kernel backend ('auto' | 'triton' | 'torch').
+        max_num_seqs: Max concurrent sequences per engine (vLLM continuous-batch
+            width). Larger = higher throughput until KV-cache-bound. None = vLLM
+            default. The single biggest decode-throughput knob for this workload
+            (every seed runs the *same* prompt batch, so a wide batch saturates).
+        max_model_len: Cap the model's max sequence length. Lower than the model
+            default frees KV cache for a bigger batch when prompts+gen are short.
         gpu_memory_utilization: Fraction of GPU mem vLLM may use. IMPORTANT: the
             resident base-weights copy (~1x model) is allocated *outside* vLLM's
             budget after init, so leave headroom: (1-util)*mem >= per-GPU weight
@@ -118,6 +124,10 @@ def launch_engines(num_engines: int, model_name: str, precision: str = "bfloat16
             gpu_memory_utilization=gpu_memory_utilization,
             disable_log_stats=True,
         )
+        if max_num_seqs is not None:
+            engine_kwargs["max_num_seqs"] = max_num_seqs
+        if max_model_len is not None:
+            engine_kwargs["max_model_len"] = max_model_len
         if multimodal:
             engine_kwargs["limit_mm_per_prompt"] = {"image": 1}
         

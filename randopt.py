@@ -97,15 +97,23 @@ def load_data(handler, args):
     return train_datas, test_datas
 
 
-def evaluate_base_model(engines, handler, train_prompts, test_prompts, train_datas, test_datas, sampling_params):
-    """Evaluate base model on train and test sets."""
+def evaluate_base_model(engines, handler, train_prompts, test_prompts, train_datas, test_datas, sampling_params, on_outputs=None):
+    """Evaluate base model on train and test sets.
+
+    on_outputs: optional callback(list_of_RequestOutput) invoked for each
+    generate() result, for throughput accounting. Default None = upstream behavior.
+    """
     print(f"\n{'='*60}\nBASE MODEL EVALUATION\n{'='*60}")
-    
+
     train_outputs = ray.get(engines[0].generate.remote(train_prompts, sampling_params, use_tqdm=False))
+    if on_outputs is not None:
+        on_outputs(train_outputs)
     base_train_reward = handler.postprocess_outputs(train_outputs, train_datas)
     print(f"Train reward: {base_train_reward*100:.2f}%")
-    
+
     test_outputs = ray.get(engines[0].generate.remote(test_prompts, sampling_params, use_tqdm=False))
+    if on_outputs is not None:
+        on_outputs(test_outputs)
     correct = 0
     # base model test evaluation should be consistent with handler's logic for correctness check
     # which should also be consistent with ensemble evaluation logic (extract answer, validate, then check correctness)
@@ -137,8 +145,12 @@ def evaluate_base_model(engines, handler, train_prompts, test_prompts, train_dat
     return base_train_reward, base_test_accuracy
 
 
-def run_sampling(args, engines, handler, train_prompts, train_datas, sampling_params):
-    """Run perturbation sampling."""
+def run_sampling(args, engines, handler, train_prompts, train_datas, sampling_params, on_outputs=None):
+    """Run perturbation sampling.
+
+    on_outputs: optional callback(list_of_RequestOutput) per generate() result,
+    for throughput accounting. Default None = upstream behavior.
+    """
     print(f"\n{'='*60}\nPERTURBATION SAMPLING\n{'='*60}")
     print(f"Budget: {args.population_size} | Sigmas: {args.sigma_list}")
     
@@ -161,12 +173,16 @@ def run_sampling(args, engines, handler, train_prompts, train_datas, sampling_pa
         ray.get([engines[i].collective_rpc.remote("perturb_self_weights", args=(int(s), sig, False)) 
                  for i, (s, sig) in enumerate(batch)])
         
-        outputs = ray.get([engines[i].generate.remote(train_prompts, sampling_params, use_tqdm=False) 
+        outputs = ray.get([engines[i].generate.remote(train_prompts, sampling_params, use_tqdm=False)
                           for i in range(len(batch))])
-        
-        ray.get([engines[i].collective_rpc.remote("restore_self_weights", args=(int(s), sig, False)) 
+
+        ray.get([engines[i].collective_rpc.remote("restore_self_weights", args=(int(s), sig, False))
                  for i, (s, sig) in enumerate(batch)])
-        
+
+        if on_outputs is not None:
+            for o in outputs:
+                on_outputs(o)
+
         # Process results
         rewards = []
         for i, (seed, sigma) in enumerate(batch):
@@ -200,8 +216,12 @@ def run_sampling(args, engines, handler, train_prompts, train_datas, sampling_pa
     return perf, best_sigma
 
 
-def run_ensemble_evaluation(args, engines, handler, test_prompts, test_datas, top_k_perturbs, sampling_params, base_test):
-    """Run ensemble evaluation with majority voting. Memory-efficient version."""
+def run_ensemble_evaluation(args, engines, handler, test_prompts, test_datas, top_k_perturbs, sampling_params, base_test, on_outputs=None):
+    """Run ensemble evaluation with majority voting. Memory-efficient version.
+
+    on_outputs: optional callback(list_of_RequestOutput) per model's generate()
+    result, for throughput accounting. Default None = upstream behavior.
+    """
     max_k = min(args.max_top_k, len(top_k_perturbs))
     num_samples = len(test_datas)
     print(f"\n{'='*60}\nENSEMBLE EVALUATION\n{'='*60}")
@@ -230,6 +250,10 @@ def run_ensemble_evaluation(args, engines, handler, test_prompts, test_datas, to
         ray.get([engines[i].collective_rpc.remote("restore_self_weights", args=(int(s), sig, False)) 
                  for i, (s, sig) in enumerate(batch_perturbs)])
         
+        if on_outputs is not None:
+            for o in batch_outputs:
+                on_outputs(o)
+
         # Extract answers immediately and discard outputs to save memory
         for local_idx, global_idx in enumerate(range(start, end)):
             outputs = batch_outputs[local_idx]

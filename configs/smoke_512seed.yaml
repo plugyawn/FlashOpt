@@ -1,0 +1,47 @@
+# =============================================================================
+# RandOpt Speedrun — 512-SEED run (single small GPU)
+# A real-population (512) run on a 1.5B model / single L4, to exercise the full
+# pipeline at scale: throughput (seeds/sec, gen-tok/sec, prompts/sec), a real
+# top-k ensemble, per-seed probes, and held-out FineWeb bpb. Tuned for throughput
+# (CUDA graphs + wide batch) so 512 seeds finish in a reasonable wall-clock.
+# =============================================================================
+name: smoke_512seed
+
+hardware:
+  gpus: 1
+  gpu: "L4-or-better"
+  nodes: 1
+
+model: Qwen/Qwen2.5-1.5B-Instruct
+precision: bfloat16
+
+tensor_parallel_size: 1
+num_engines: 1
+gpu_memory_utilization: 0.85     # 1.5B + base copy is tiny (~6GB); lots of KV
+enforce_eager: false             # CUDA graphs on — main per-token win
+max_num_seqs: 256                # wide continuous batch over the train prompts
+max_model_len: 1536
+
+noise: rademacher
+kernel: auto
+
+dataset: gsm8k
+train_data_path: data/gsm8k/train.parquet
+test_data_path: data/gsm8k/test.parquet
+train_samples: 64                # 512 seeds x 64 train prompts = the hot loop
+test_samples: 64
+max_tokens: 320
+population_size: 512
+sigma_values: [0.0005, 0.001, 0.002]
+top_k_ratios: [0.02, 0.05]       # ensemble best ~10 and ~25 of 512
+global_seed: 42
+
+probe_top: 5                     # individually evaluate the 5 best seeds (acc+bpb)
+
+fineweb:
+  path: eval/fineweb_heldout.jsonl
+  max_len: 1024
+  max_chunks: 32
+  ensemble: true
+  build_if_missing: true
+  build_num_docs: 48

@@ -1,0 +1,60 @@
+# =============================================================================
+# RandOpt Speedrun — TUNED 1x H100-80GB (throughput-oriented)
+# A single-GPU profile tuned for high inference throughput (the thing that
+# actually bounds seeds/sec). Use this as the practical single-H100 speedrun;
+# the 8x H100 x 72B remains THE standard (configs/standard_8xh100_qwen72b.yaml).
+#
+# Model: Qwen2.5-7B-Instruct fits comfortably on one 80GB H100 *with* the
+# resident base copy (~15GB weights + ~15GB base = ~30GB), leaving ~45GB for a
+# wide KV cache -> large continuous batch.
+# =============================================================================
+name: tuned_1xh100
+
+hardware:
+  gpus: 1
+  gpu: "H100-80GB"
+  nodes: 1
+
+model: Qwen/Qwen2.5-7B-Instruct
+precision: bfloat16
+
+# ---- engine topology / throughput knobs ------------------------------------
+tensor_parallel_size: 1
+num_engines: 1
+gpu_memory_utilization: 0.78     # 7B+base copy is ~30GB; leaves ample KV. Keep
+                                 # (1-util)*80GB >= per-GPU base shard (~15GB).
+enforce_eager: false             # capture CUDA graphs — the main per-token win;
+                                 # compatible with in-place weight reconstruction.
+max_num_seqs: 512                # wide continuous batch: every seed runs the SAME
+                                 # prompt set, so a big batch saturates the GPU.
+max_model_len: 2048              # cap seq len (prompt+gen short here) to free KV
+                                 # for the bigger batch.
+
+# ---- perturbation -----------------------------------------------------------
+noise: rademacher
+kernel: auto                     # -> triton on CUDA
+
+# ---- selection task ---------------------------------------------------------
+dataset: gsm8k
+train_data_path: data/gsm8k/train.parquet
+test_data_path: data/gsm8k/test.parquet
+train_samples: 200
+test_samples: 200
+max_tokens: 512                  # GSM8K CoT fits; shorter = more seeds/hour
+population_size: 256
+sigma_values: [0.0005, 0.001, 0.002]
+top_k_ratios: [0.04, 0.1]
+global_seed: 42
+
+# ---- per-seed downstream probes (top-N individual seeds) --------------------
+probe_top: 0                     # set >0 (or pass --probe_top N) to evaluate the
+                                 # best N seeds individually (task acc + bpb each)
+
+# ---- held-out FineWeb bpb ---------------------------------------------------
+fineweb:
+  path: eval/fineweb_heldout.jsonl
+  max_len: 2048
+  max_chunks: 256
+  ensemble: true
+  build_if_missing: false
+  build_num_docs: 256

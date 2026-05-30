@@ -108,24 +108,63 @@ def throughput():
     return out
 
 
-@app.function(gpu="L4", image=e2e_image, timeout=3600)
-def e2e_smoke(git_commit: str = "unknown"):
+def _run_e2e(config: str, git_commit: str, probe_top: int, n_train: int, n_test: int):
+    """Shared e2e body: prep GSM8K data, run the speedrun for `config`, return record."""
     import os, sys, subprocess, glob, json
     os.chdir("/root/RandOpt")
     # git isn't installed in the container; pass the host commit through so the
     # record's provenance is real.
     env = dict(os.environ, PYTHONPATH="/root/RandOpt", RANDOPT_GIT_COMMIT=git_commit)
-    subprocess.run([sys.executable, "scripts/make_gsm8k_smoke.py", "--n-train", "32", "--n-test", "32"],
-                   check=True, env=env)
-    r = subprocess.run([sys.executable, "speedrun.py", "--config", "configs/smoke_1gpu_small.yaml"],
-                       env=env)
+    subprocess.run([sys.executable, "scripts/make_gsm8k_smoke.py",
+                    "--n-train", str(n_train), "--n-test", str(n_test)], check=True, env=env)
+    cmd = [sys.executable, "speedrun.py", "--config", config]
+    if probe_top:
+        cmd += ["--probe_top", str(probe_top)]
+    r = subprocess.run(cmd, env=env)
     recs = sorted(glob.glob("speedrun-runs/*/record.json"))
     rec = json.load(open(recs[-1])) if recs else {}
-    return {"tier": "e2e", "returncode": r.returncode, "record": rec}
+    return {"tier": "e2e", "config": config, "returncode": r.returncode, "record": rec}
+
+
+@app.function(gpu="L4", image=e2e_image, timeout=3600)
+def e2e_smoke(git_commit: str = "unknown", probe_top: int = 0):
+    return _run_e2e("configs/smoke_1gpu_small.yaml", git_commit, probe_top, 32, 32)
+
+
+# 512-seed run: more data + a bigger GPU (A10G: CUDA graphs + headroom), still cheap.
+@app.function(gpu="A10G", image=e2e_image, timeout=5400)
+def e2e_512(git_commit: str = "unknown", probe_top: int = 5):
+    return _run_e2e("configs/smoke_512seed.yaml", git_commit, probe_top, 80, 80)
+
+
+def _host_commit():
+    import subprocess
+    try:
+        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"],
+                                       cwd=REPO, text=True).strip()
+    except Exception:
+        return "unknown"
+
+
+def _report_e2e(res2, save_name):
+    import json
+    print("\n================ E2E RESULT ================")
+    rec = res2.get("record") or {}
+    print("config:", res2.get("config"), "| returncode:", res2.get("returncode"))
+    print(json.dumps({k: rec.get(k) for k in
+                      ["seeds_per_sec", "throughput", "base_test_accuracy",
+                       "best_ensemble_accuracy", "fineweb", "probes", "timings_s"]},
+                     indent=2, default=float))
+    if rec:
+        d = os.path.join(REPO, "speedrun-runs", save_name)
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "record.json"), "w") as f:
+            json.dump(rec, f, indent=2)
+        print(f"wrote speedrun-runs/{save_name}/record.json")
 
 
 @app.local_entrypoint()
-def main(tier: str = "1"):
+def main(tier: str = "1", probe_top: int = 0):
     import json
     if tier == "throughput":
         res = throughput.remote()
@@ -134,6 +173,11 @@ def main(tier: str = "1"):
         for r in res["runs"]:
             print(f"  n={r['n']:>12,}  old(perturb+restore)={r['old_ms']:7.2f}ms  "
                   f"fused reconstruct={r['new_ms']:7.2f}ms  speedup={r['speedup']:.2f}x")
+        return
+    if tier == "512":
+        # 512-seed real-population run (A10G). probe_top defaults to 5 here.
+        res2 = e2e_512.remote(git_commit=_host_commit(), probe_top=probe_top or 5)
+        _report_e2e(res2, "modal_512seed")
         return
     # tier "2" runs ONLY the e2e (kernel already validated); "1"/"all" run kernel.
     if tier != "2":
@@ -144,22 +188,5 @@ def main(tier: str = "1"):
         if res.get("returncode") != 0:
             print("!! kernel test FAILED")
     if tier in ("2", "all"):
-        import subprocess
-        try:
-            commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"],
-                                             cwd=REPO, text=True).strip()
-        except Exception:
-            commit = "unknown"
-        res2 = e2e_smoke.remote(git_commit=commit)
-        print("\n================ E2E RESULT ================")
-        rec = res2.get("record") or {}
-        print("returncode:", res2.get("returncode"))
-        print(json.dumps({k: rec.get(k) for k in
-                          ["seeds_per_sec", "base_test_accuracy", "best_ensemble_accuracy",
-                           "fineweb", "timings_s"]}, indent=2))
-        if rec:
-            d = os.path.join(REPO, "speedrun-runs", "modal_smoke")
-            os.makedirs(d, exist_ok=True)
-            with open(os.path.join(d, "record.json"), "w") as f:
-                json.dump(rec, f, indent=2)
-            print("wrote speedrun-runs/modal_smoke/record.json")
+        res2 = e2e_smoke.remote(git_commit=_host_commit(), probe_top=probe_top)
+        _report_e2e(res2, "modal_smoke")
