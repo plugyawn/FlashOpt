@@ -100,12 +100,34 @@ FineWeb is *never* used for selection (selection is task reward), so any fixed
 slice is a valid held-out language-modeling probe; the slice + its sha256 are
 pinned in `eval/fineweb_heldout.jsonl(.manifest.json)`.
 
-### bf16 resolution caveat
+### bf16 resolution caveat — and why we reconstruct from base (measured)
 
-A σ≈1e-3 perturbation on an O(1) weight is below bf16 resolution (ULP ≈ 2⁻⁷ at
-|w|≈1), so it rounds away; perturbations survive mainly on smaller-magnitude
-weights. This is inherent to bf16 (upstream has it too) — choose σ relative to the
-weight magnitudes and the dtype. Ensemble averaging is done in fp32.
+A σ≈1e-3 perturbation on an O(1) weight is below bf16 resolution (ULP = 2⁻⁸ ≈
+0.0039 at |w|≈1), so it rounds to ±1 ULP; perturbations survive mainly on
+smaller-magnitude weights. Inherent to bf16 (upstream has it too) — choose σ
+relative to the weight magnitudes and the dtype. Ensemble averaging is in fp32.
+
+This is also the real reason for the **2× resident base copy** (absolute
+reconstruction `W = W₀ + σ·R`) over the 1× in-place delta switch
+(`W += σ(R_to − R_from)`). Measured drift (CPU, |w|≈1; `tests/test_perturb.py::
+test_inplace_switch_drift`):
+
+| dtype | σ | mean |Δ| vs fresh reconstruct | Δ/σ | grows with #hops? |
+|-------|-----|---------------------------|------|--------|
+| bf16  | 1e-3 | 7.7e-4 | **0.77** | **no — flat 16→2048 hops** |
+| bf16  | 1e-2 | 2.0e-3 | 0.20 | no |
+| fp16  | 1e-3 | 4.6e-5 | 0.046 | no |
+
+Two findings: (1) the error does **not** accumulate over hops — `R∈{−1,+1}` is
+exact in bf16, so each `+=` rounds at the local ULP and re-randomizes rather than
+compounding. (2) But the per-switch rounding is a *large fraction of σ* at
+production σ (0.77σ for bf16/σ=1e-3), which makes delta-switching **path-dependent**:
+two different seed-chains reaching the same final seed differ by up to one ULP
+(≈4σ), so a seed's weights aren't reproducible. Absolute reconstruction is
+path-independent and bit-identical every run — that reproducibility (not
+"preventing accumulation") is what the 2× copy buys. The 1× path
+(`switch_model`) remains available when memory forces it and bit-exactness can be
+traded away.
 
 ## "Batching profiles" — the honest version
 

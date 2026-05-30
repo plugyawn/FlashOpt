@@ -123,23 +123,46 @@ def test_switch_equals_reconstruct_fp32():
     assert torch.allclose(live, target, atol=1e-6), (live - target).abs().max().item()
 
 
-def test_switch_bf16_drift_motivates_reconstruct():
-    # bf16 in-place switching accumulates rounding error: after a loop of hops
-    # returning to the start seed, `live` does NOT match a fresh reconstruct.
-    # This is exactly why the runtime reconstructs absolutely from a resident
-    # base (drift-free) instead of delta-switching for long runs.
-    base = torch.randn(8192, dtype=torch.float32).to(torch.bfloat16)
-    sigma = 1e-3
-    live = _reconstruct_tensor(base, 1, sigma, torch.bfloat16)
-    prev = 1
-    for s in [2, 3, 4, 5, 1]:
-        P.switch_inplace(live, prev, s, sigma, 0, kernel="torch")
-        prev = s
-    target = _reconstruct_tensor(base, 1, sigma, torch.bfloat16)     # fresh reconstruct of seed 1
-    drift = (live.to(torch.float32) - target.to(torch.float32)).abs().max().item()
-    # Drift is real (non-zero) but bounded by a few bf16 ULPs (~2^-7 at |w|~1).
-    assert drift > 0.0, "expected measurable bf16 drift from delta-switching"
-    assert drift < 0.05, f"drift {drift} larger than a few bf16 ULPs — unexpected"
+def test_inplace_switch_drift():
+    """Quantify bf16 in-place delta-switch error vs absolute reconstruction, and
+    pin the two measured facts that justify the 2x resident base copy:
+      (1) the error does NOT accumulate with the number of hops (R in {-1,+1} is
+          exact in bf16; each += rounds at the local ULP and re-randomizes), and
+      (2) it is path-dependent: two seed-chains reaching the same final seed
+          differ, so a seed isn't reproducible under delta-switching — whereas
+          absolute reconstruct is bit-identical regardless of path/history.
+    """
+    import numpy as np
+    D, sigma = 200_000, 1e-3
+    base = torch.randn(D, dtype=torch.float32)
+
+    def rec(seed):
+        out = torch.empty(D, dtype=torch.bfloat16)
+        P.reconstruct_into(out, base.to(torch.bfloat16), seed, sigma, 0, kernel="torch")
+        return out
+
+    def chain_drift(hops):
+        rng = np.random.default_rng(42)
+        seeds = rng.choice(2**31, size=hops + 1, replace=False).tolist()
+        live = rec(seeds[0])
+        for i in range(hops):
+            P.switch_inplace(live, seeds[i], seeds[i + 1], sigma, 0, kernel="torch")
+        target = rec(seeds[-1])
+        return (live.float() - target.float()).abs().mean().item()
+
+    # (1) flat with hops: drift at 2048 hops ~= drift at 16 hops (no accumulation)
+    d16, d2048 = chain_drift(16), chain_drift(2048)
+    assert abs(d2048 - d16) < 0.2 * d16, f"drift accumulated: {d16:.2e} -> {d2048:.2e}"
+    # the per-switch error is a large fraction of sigma at production sigma (bf16)
+    assert 0.4 * sigma < d16 < 1.2 * sigma, f"unexpected drift/sigma: {d16/sigma:.2f}"
+
+    # (2) path-dependence: two different chains to the same final seed differ,
+    #     while absolute reconstruction is bit-identical regardless of path.
+    a = rec(100); P.switch_inplace(a, 100, 200, sigma, 0, kernel="torch")
+    P.switch_inplace(a, 200, 777, sigma, 0, kernel="torch")
+    b = rec(500); P.switch_inplace(b, 500, 777, sigma, 0, kernel="torch")
+    assert (a.float() - b.float()).abs().max().item() > 0.0, "delta-switch should be path-dependent"
+    assert torch.equal(rec(777), rec(777)), "absolute reconstruct must be path-independent/bit-exact"
 
 
 # --------------------------------------------------------------------------- #
