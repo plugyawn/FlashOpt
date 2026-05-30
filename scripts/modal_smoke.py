@@ -138,6 +138,13 @@ def e2e_512(git_commit: str = "unknown", probe_top: int = 5):
     return _run_e2e("configs/smoke_512seed.yaml", git_commit, probe_top, 80, 80)
 
 
+# Larger Qwen on a single H100-80GB, CUDA graphs ON. 7B = ~15GB weights + ~15GB
+# resident base copy = ~30GB, leaving ~50GB for KV + graph pools — comfortable.
+@app.function(gpu="H100", image=e2e_image, timeout=5400)
+def e2e_7b(git_commit: str = "unknown", probe_top: int = 3):
+    return _run_e2e("configs/tuned_1xh100.yaml", git_commit, probe_top, 64, 64)
+
+
 def _host_commit():
     import subprocess
     try:
@@ -176,9 +183,17 @@ def main(tier: str = "1", probe_top: int = 0):
                   f"fused reconstruct={r['new_ms']:7.2f}ms  speedup={r['speedup']:.2f}x")
         return
     if tier == "512":
-        # 512-seed real-population run (A10G). probe_top defaults to 5 here.
+        # 512-seed real-population run (L4). probe_top defaults to 5 here.
         res2 = e2e_512.remote(git_commit=_host_commit(), probe_top=probe_top or 5)
         _report_e2e(res2, "modal_512seed")
+        return
+    if tier == "3b":
+        res2 = e2e_3b.remote(git_commit=_host_commit(), probe_top=probe_top or 3)
+        _report_e2e(res2, "modal_3b")
+        return
+    if tier == "7b":
+        res2 = e2e_7b.remote(git_commit=_host_commit(), probe_top=probe_top or 3)
+        _report_e2e(res2, "modal_7b")
         return
     # tier "2" runs ONLY the e2e (kernel already validated); "1"/"all" run kernel.
     if tier != "2":

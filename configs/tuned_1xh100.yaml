@@ -21,8 +21,11 @@ precision: bfloat16
 # ---- engine topology / throughput knobs ------------------------------------
 tensor_parallel_size: 1
 num_engines: 1
-gpu_memory_utilization: 0.78     # 7B+base copy is ~30GB; leaves ample KV. Keep
-                                 # (1-util)*80GB >= per-GPU base shard (~15GB).
+gpu_memory_utilization: 0.65     # The resident base copy (~15GB for 7B bf16) is
+                                 # allocated OUTSIDE this budget, and CUDA-graph
+                                 # capture needs private pools — so keep
+                                 # (1-util)*80GB = 28GB >= base(15GB)+graphs+slack.
+                                 # 0.65 -> ~52GB for vLLM weights+KV, 28GB free.
 enforce_eager: false             # capture CUDA graphs — the main per-token win;
                                  # compatible with in-place weight reconstruction.
 max_num_seqs: 512                # wide continuous batch: every seed runs the SAME
