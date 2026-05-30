@@ -25,3 +25,5 @@ speedrun-runs/
  *.pt
  *.pkl
  *.whl
+# Local Claude scheduler state (not for the repo)
+.claude/
