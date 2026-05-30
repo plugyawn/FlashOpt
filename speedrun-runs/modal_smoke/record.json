@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-05-29T23:50:04+00:00",
-  "git_commit": "unknown",
+  "timestamp": "2026-05-30T05:57:09+00:00",
+  "git_commit": "36abea5",
   "config_name": "smoke_1gpu_small",
   "config_sha256": "cd359de9e6afa42d",
   "hardware": {
@@ -24,14 +24,50 @@
   ],
   "best_sigma": 0.001,
   "timings_s": {
-    "launch": 91.322648402,
-    "base_eval": 10.775626814000006,
-    "sampling": 83.025059699,
-    "ensemble_eval": 21.49453373899999,
-    "fineweb": 256.883484718,
-    "total": 472.044712584
+    "launch": 93.161265539,
+    "base_eval": 11.854812827000003,
+    "sampling": 80.750315358,
+    "ensemble_eval": 27.171830884000002,
+    "probes": 273.657540913,
+    "fineweb": 5.597889377000001,
+    "total": 500.689982857
   },
-  "seeds_per_sec": 0.19271289967157607,
+  "seeds_per_sec": 0.19814164104580018,
+  "throughput": {
+    "gen_tokens": 157598,
+    "prompt_tokens": 82971,
+    "prompts": 704,
+    "gen_seconds": 119.776959069,
+    "gen_tokens_per_sec": 1315.7622402920783,
+    "total_tokens_per_sec": 2008.4747673499978,
+    "prompts_per_sec": 5.8775911951016075,
+    "per_phase": {
+      "base_eval": {
+        "gen_tokens": 14842,
+        "prompt_tokens": 7455,
+        "prompts": 64,
+        "seconds": 11.854812827000003,
+        "gen_tok_per_sec": 1251.9809647434085,
+        "prompts_per_sec": 5.398651242661242
+      },
+      "sampling": {
+        "gen_tokens": 112938,
+        "prompt_tokens": 60928,
+        "prompts": 512,
+        "seconds": 80.750315358,
+        "gen_tok_per_sec": 1398.6075410269113,
+        "prompts_per_sec": 6.340532513465606
+      },
+      "ensemble_eval": {
+        "gen_tokens": 29818,
+        "prompt_tokens": 14588,
+        "prompts": 128,
+        "seconds": 27.171830884000002,
+        "gen_tok_per_sec": 1097.3864855591378,
+        "prompts_per_sec": 4.710760954845047
+      }
+    }
+  },
   "base_train_reward": 0.59375,
   "base_test_accuracy": 0.28125,
   "ensemble_accuracy": {
@@ -53,6 +89,41 @@
     },
     "manifest_sha256": "0fa5169bf97b3005e405eb6bffbc47b6ffe5367c4fbb54876640069313e2202c"
   },
+  "probes": [
+    {
+      "rank": 1,
+      "seed": 942484267,
+      "sigma": 0.001,
+      "train_reward": 0.53125,
+      "test_accuracy": 37.5,
+      "test_correct": 12,
+      "n_test": 32,
+      "fineweb_bpb": 0.2696626804003343,
+      "fineweb_nats_per_token": 2.2574294155729864
+    },
+    {
+      "rank": 2,
+      "seed": 1688060241,
+      "sigma": 0.002,
+      "train_reward": 0.53125,
+      "test_accuracy": 37.5,
+      "test_correct": 12,
+      "n_test": 32,
+      "fineweb_bpb": 0.2797081747535494,
+      "fineweb_nats_per_token": 2.3415233451195383
+    },
+    {
+      "rank": 3,
+      "seed": 1540770719,
+      "sigma": 0.001,
+      "train_reward": 0.53125,
+      "test_accuracy": 18.75,
+      "test_correct": 6,
+      "n_test": 32,
+      "fineweb_bpb": 0.2698234260335161,
+      "fineweb_nats_per_token": 2.2587750668148665
+    }
+  ],
   "top_k_perturbs": [
     [
       942484267,

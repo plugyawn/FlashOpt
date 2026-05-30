@@ -51,6 +51,21 @@ population 16, GSM8K (32 train / 32 test) — record in
 - Throughput **0.19 seeds/s** (16 seeds in 83 s) on a single L4, `enforce_eager`,
   greedy. This is a tiny smoke, not the 8×H100 standard.
 
-| date | commit | config | model | hardware | pop | seeds/s | base acc | ens acc | base bpb | ens bpb | total |
-|------|--------|--------|-------|----------|-----|---------|----------|---------|----------|---------|-------|
-| 2026-05-30 | bf6e80b | smoke_1gpu_small | Qwen2.5-1.5B-Instruct | 1×NVIDIA L4 | 16 | 0.19 | 28.1% | 40.6% | 0.267 | 0.268 | 472s |
+### Throughput (measured, default-logged)
+
+`seeds/sec` is the optimization rate; `gen-tok/sec` and `prompts/sec` are the
+inference rates the harness now logs by default (amortized over the
+base+sampling+ensemble generation phases). From the `--probe_top 3` L4 run:
+
+- **0.20 seeds/sec**, **~1.3–1.4k generated-tokens/sec**, **~5.9 prompts/sec**
+  (≈2.0k total tokens/sec incl. prefill) on a single L4, eager, greedy.
+- Per-seed `--probe_top 3` (each top seed evaluated standalone, not voted): the
+  best seed alone reached **37.5%** test acc (vs 28.1% base), but the #3 seed
+  *dropped to 18.8%* despite equal train reward — i.e. high train reward doesn't
+  guarantee held-out gains; the **K=4 ensemble (40.6%) beat every individual
+  seed**. (bpb per seed ≈ 0.270, flat vs base 0.2665, as expected at this scale.)
+
+| date | commit | config | model | hardware | pop | seeds/s | gen-tok/s | prompts/s | base acc | ens acc | base bpb | ens bpb | total |
+|------|--------|--------|-------|----------|-----|---------|-----------|-----------|----------|---------|----------|---------|-------|
+| 2026-05-30 | bf6e80b | smoke_1gpu_small | Qwen2.5-1.5B-Instruct | 1×NVIDIA L4 | 16 | 0.19 | — | — | 28.1% | 40.6% | 0.267 | 0.268 | 472s |
+| 2026-05-30 | 36abea5 | smoke_1gpu_small (+probe) | Qwen2.5-1.5B-Instruct | 1×NVIDIA L4 | 16 | 0.20 | 1316 | 5.88 | 28.1% | 40.6% | 0.267 | 0.268 | — |
