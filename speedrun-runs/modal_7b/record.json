@@ -1,0 +1,17 @@
+{
+  "note": "Reconstructed from modal app logs ap-86K9l6lxHvUbLfo5Aaf3Wr; full record was written remotely in the container.",
+  "git_commit": "27c5438",
+  "config_name": "tuned_1xh100",
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "hardware": {"gpu": "NVIDIA H100", "gpu_count": 1},
+  "enforce_eager": false,
+  "cuda_graphs": {"captured": true, "capture_seconds": 4, "pool_gib": 0.59, "sizes": 51},
+  "population_size": 256,
+  "seeds_per_sec": 0.33214917355309037,
+  "throughput": {"gen_tokens": 4583022, "gen_tokens_per_sec": 5296.22, "total_tokens_per_sec": 7780.48, "prompts_per_sec": 20.93},
+  "base_test_accuracy": 0.90625,
+  "best_ensemble_accuracy": 90.625,
+  "timings_s": {"launch": 138.47, "sampling": 770.74, "total": 1021.16},
+  "quality_caveat": "base already 90.6% on 64-sample GSM8K slice; ensemble saturated (+0.0). probe seed 41927453 hit 93.8% individually. FineWeb skipped (build_if_missing=false).",
+  "sampling_rewards_vary": true
+}
