@@ -192,8 +192,11 @@ def run_sampling(args, engines, handler, train_prompts, train_datas, sampling_pa
         
         samples_evaluated += len(batch)
         batch_idx += 1
-        print(f"  Batch {batch_idx} | {samples_evaluated}/{args.population_size} | {['%.3f' % r for r in rewards]}")
-    
+        # flush: under Modal/pipes stdout is block-buffered, so without this the
+        # per-batch progress accumulates (~200 lines) before becoming visible —
+        # which looks exactly like a stall when tailing `modal app logs`.
+        print(f"  Batch {batch_idx} | {samples_evaluated}/{args.population_size} | {['%.3f' % r for r in rewards]}", flush=True)
+
     print(f"\nSampling done.")
     
     # Summary

@@ -121,8 +121,11 @@ def _run_e2e(config: str, git_commit: str, probe_top: int, n_train: int, n_test:
     import os, sys, subprocess, glob, json
     os.chdir("/root/RandOpt")
     # git isn't installed in the container; pass the host commit through so the
-    # record's provenance is real.
-    env = dict(os.environ, PYTHONPATH="/root/RandOpt", RANDOPT_GIT_COMMIT=git_commit)
+    # record's provenance is real. PYTHONUNBUFFERED=1 so progress prints stream
+    # live to `modal app logs` (block buffering on a pipe makes a working run look
+    # stalled — ~200 batch lines buffer before becoming visible).
+    env = dict(os.environ, PYTHONPATH="/root/RandOpt", RANDOPT_GIT_COMMIT=git_commit,
+               PYTHONUNBUFFERED="1")
     if data_cmd is None:
         data_cmd = [sys.executable, "scripts/make_gsm8k_smoke.py",
                     "--n-train", str(n_train), "--n-test", str(n_test)]
