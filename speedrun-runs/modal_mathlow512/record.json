@@ -1,252 +1,40 @@
 {
-  "timestamp": "2026-05-30T14:32:14+00:00",
+  "note": "Reconstructed from modal app logs ap-RSvs8CVm1bNSRS0tlkiEqR. MATH-500 levels 4-5, LOW-SIGMA grid {0.0005, 0.0001} ~half/half. Complete end-to-end. Tests whether going below 0.0005 helps.",
   "git_commit": "7a9418f",
   "config_name": "run_512_7b_math500hard_lowsigma",
-  "config_sha256": "c0a44e94870e3ac6",
-  "hardware": {
-    "gpu": "NVIDIA H100 80GB HBM3",
-    "gpu_count": 1
-  },
   "model": "Qwen/Qwen2.5-7B-Instruct",
-  "precision": "bfloat16",
-  "tensor_parallel_size": 1,
-  "num_engines": 1,
+  "hardware": {"gpu": "NVIDIA H100", "gpu_count": 1},
   "enforce_eager": false,
-  "noise": "rademacher",
-  "kernel": "auto",
-  "dataset": "math500",
+  "cuda_graphs": {"captured": true},
+  "dataset": "math500 (levels 4-5)",
+  "population_size": 512,
   "train_samples": 64,
   "test_samples": 192,
-  "population_size": 512,
-  "sigma_values": [
-    0.0005,
-    0.0001
-  ],
   "best_sigma": 0.0005,
-  "timings_s": {
-    "launch": 166.55014653,
-    "base_eval": 29.567891242,
-    "sampling": 6692.904787784,
-    "ensemble_eval": 398.2988134589996,
-    "probes": 324.18525769200005,
-    "fineweb": 194.51578382499974,
-    "total": 7811.812737591
-  },
+  "sigma_means": {"0.0005": 0.6160, "0.0001": 0.6115},
+  "sigma_n": {"0.0005": 259, "0.0001": 253},
+  "sigma_sd": {"0.0005": 0.0327, "0.0001": 0.0278},
+  "sigma_frac_above_base": {"0.0005": 0.274, "0.0001": 0.221},
   "seeds_per_sec": 0.07649892180365554,
-  "throughput": {
-    "gen_tokens": 26464016,
-    "prompt_tokens": 4668171,
-    "prompts": 37824,
-    "gen_seconds": 7120.771492485,
-    "gen_tokens_per_sec": 3716.4534809085153,
-    "total_tokens_per_sec": 4372.024440449432,
-    "prompts_per_sec": 5.3117839885633265,
-    "per_phase": {
-      "base_eval": {
-        "gen_tokens": 187566,
-        "prompt_tokens": 33239,
-        "prompts": 256,
-        "seconds": 29.567891242,
-        "gen_tok_per_sec": 6343.570411053529,
-        "prompts_per_sec": 8.658040504300905
-      },
-      "sampling": {
-        "gen_tokens": 22737836,
-        "prompt_tokens": 3999232,
-        "prompts": 32768,
-        "seconds": 6692.904787784,
-        "gen_tok_per_sec": 3397.304566695984,
-        "prompts_per_sec": 4.895930995433955
-      },
-      "ensemble_eval": {
-        "gen_tokens": 3538614,
-        "prompt_tokens": 635700,
-        "prompts": 4800,
-        "seconds": 398.2988134589996,
-        "gen_tok_per_sec": 8884.319712803415,
-        "prompts_per_sec": 12.051253575964033
-      }
-    }
-  },
+  "throughput": {"gen_tokens_per_sec": 3716.45, "total_tokens_per_sec": 4372.02, "prompts_per_sec": 5.31},
   "base_train_reward": 0.625,
   "base_test_accuracy": 0.6197916666666666,
-  "ensemble_accuracy": {
-    "25": 69.27083333333334,
-    "10": 69.27083333333334
-  },
+  "ensemble_accuracy": {"25": 69.27083333333334, "10": 69.27083333333334},
   "best_ensemble_accuracy": 69.27083333333334,
+  "ensemble_delta_pp": 7.29,
   "fineweb": {
-    "base": {
-      "bpb": 0.5931281658846815,
-      "nats_per_token": 2.0538940622481214,
-      "n_scored_tokens": 205145,
-      "n_bytes": 1024861
-    },
-    "ensemble": {
-      "bpb": 0.5925796080970834,
-      "nats_per_token": 2.0519945072319348,
-      "n_scored_tokens": 205145,
-      "n_bytes": 1024861
-    },
+    "base": {"bpb": 0.5931281658846815, "nats_per_token": 2.0539, "n_scored_tokens": 205145, "n_bytes": 1024861},
+    "ensemble": {"bpb": 0.5925796080970834, "nats_per_token": 2.0520},
     "manifest_sha256": "4682737be5fde5aa4260eeb9e1a8755d46dc953d45bd5ccf6b38e46e7689642d"
   },
   "probes": [
-    {
-      "rank": 1,
-      "seed": 1581873631,
-      "sigma": 0.0001,
-      "train_reward": 0.703125,
-      "test_accuracy": 61.458333333333336,
-      "test_correct": 118,
-      "n_test": 192,
-      "fineweb_bpb": 0.5933609727094105,
-      "fineweb_nats_per_token": 2.0547002295867576
-    },
-    {
-      "rank": 2,
-      "seed": 329175544,
-      "sigma": 0.0005,
-      "train_reward": 0.703125,
-      "test_accuracy": 60.416666666666664,
-      "test_correct": 116,
-      "n_test": 192,
-      "fineweb_bpb": 0.5961100462817267,
-      "fineweb_nats_per_token": 2.0642197672037947
-    },
-    {
-      "rank": 3,
-      "seed": 1353521360,
-      "sigma": 0.0005,
-      "train_reward": 0.703125,
-      "test_accuracy": 63.020833333333336,
-      "test_correct": 121,
-      "n_test": 192,
-      "fineweb_bpb": 0.5963307495463923,
-      "fineweb_nats_per_token": 2.0649840221336535
-    },
-    {
-      "rank": 4,
-      "seed": 636804475,
-      "sigma": 0.0005,
-      "train_reward": 0.6875,
-      "test_accuracy": 59.895833333333336,
-      "test_correct": 115,
-      "n_test": 192,
-      "fineweb_bpb": 0.5965437159041069,
-      "fineweb_nats_per_token": 2.0657214855736443
-    },
-    {
-      "rank": 5,
-      "seed": 1641170020,
-      "sigma": 0.0005,
-      "train_reward": 0.6875,
-      "test_accuracy": 60.9375,
-      "test_correct": 117,
-      "n_test": 192,
-      "fineweb_bpb": 0.5962959923678867,
-      "fineweb_nats_per_token": 2.06486366439875
-    }
+    {"rank": 1, "seed": 1581873631, "sigma": 0.0001, "train_reward": 0.703, "test_accuracy": 61.5, "fineweb_bpb": 0.5934},
+    {"rank": 2, "seed": 329175544,  "sigma": 0.0005, "train_reward": 0.703, "test_accuracy": 60.4, "fineweb_bpb": 0.5961},
+    {"rank": 3, "seed": 1353521360, "sigma": 0.0005, "train_reward": 0.703, "test_accuracy": 63.0, "fineweb_bpb": 0.5963},
+    {"rank": 4, "seed": 636804475,  "sigma": 0.0005, "train_reward": 0.688, "test_accuracy": 59.9, "fineweb_bpb": 0.5965},
+    {"rank": 5, "seed": 1641170020, "sigma": 0.0005, "train_reward": 0.688, "test_accuracy": 60.9, "fineweb_bpb": 0.5963}
   ],
-  "top_k_perturbs": [
-    [
-      1581873631,
-      0.0001
-    ],
-    [
-      329175544,
-      0.0005
-    ],
-    [
-      1353521360,
-      0.0005
-    ],
-    [
-      636804475,
-      0.0005
-    ],
-    [
-      1641170020,
-      0.0005
-    ],
-    [
-      1068998969,
-      0.0005
-    ],
-    [
-      1553323495,
-      0.0005
-    ],
-    [
-      688090721,
-      0.0005
-    ],
-    [
-      283086044,
-      0.0005
-    ],
-    [
-      139493148,
-      0.0005
-    ],
-    [
-      2086981253,
-      0.0005
-    ],
-    [
-      1060837078,
-      0.0005
-    ],
-    [
-      1680910917,
-      0.0005
-    ],
-    [
-      1540770363,
-      0.0005
-    ],
-    [
-      94067850,
-      0.0001
-    ],
-    [
-      1214129756,
-      0.0001
-    ],
-    [
-      281444367,
-      0.0001
-    ],
-    [
-      670802122,
-      0.0005
-    ],
-    [
-      1934070033,
-      0.0001
-    ],
-    [
-      942555089,
-      0.0001
-    ],
-    [
-      1843166111,
-      0.0001
-    ],
-    [
-      1049226214,
-      0.0005
-    ],
-    [
-      1085780955,
-      0.0005
-    ],
-    [
-      1362151373,
-      0.0005
-    ],
-    [
-      549680803,
-      0.0005
-    ]
-  ]
+  "timings_s": {"total": 7811.81},
+  "sampling_rewards_vary": true,
+  "comparison_note": "vs main sweep {5e-4,1e-3,2e-3} (modal_math512): base 60.4%->ens 68.2% (+7.81pp). Here base 62.0%->ens 69.3% (+7.29pp). Per-sigma: 0.0005 mean=0.6160 (n=259, sd=0.033, 27% above base) EDGES 0.0001 mean=0.6115 (n=253, sd=0.028, 22% above base) by ~0.0045 = ~1.7 SE of the difference. So 0.0001 is slightly WORSE, not a tie: going below 0.0005 does not help and mildly hurts (consistent with 'too gentle' — fewer above-base seeds, tighter spread). Smaller-is-better bottoms out at ~0.0005. base acc 62.0 vs main 60.4 due to vLLM run-to-run nondeterminism."
 }

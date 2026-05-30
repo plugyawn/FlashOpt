@@ -154,19 +154,21 @@ GSM8K. `configs/run_512_7b_math500hard.yaml`, record `speedrun-runs/modal_math51
 
 ### Low-sigma probe: {0.0005, 0.0001} half/half (does smaller-than-0.0005 help?)
 
-Identical to the run above EXCEPT the sigma grid = {0.0005, 0.0001} (~253/259 split),
+Identical to the run above EXCEPT the sigma grid = {0.0005, 0.0001} (~259/253 split),
 `configs/run_512_7b_math500hard_lowsigma.yaml`, record `speedrun-runs/modal_mathlow512/`.
 
-- **sigma=0.0001 is a statistical TIE with 0.0005** on mean train reward:
-  0.0005 -> 0.6212 (n=253), 0.0001 -> 0.6207 (n=259) — a 0.0005 gap, ~1/30th of one
-  problem on the 64-problem set. best_sigma picked 0.0005 but the margin is noise.
-  **Going below 0.0005 neither helps nor hurts.** So the smaller-is-better trend
-  from the {5e-4,1e-3,2e-3} sweep FLATTENS OUT at the bottom — there's a floor, not
-  a monotonic gain; 0.0001 is gentle enough to be ~harmless but adds nothing.
-- **Ensemble still wins big**: base 61.98% -> K=25/K=10 **69.27% (+7.29 pp)**,
-  matching the main sweep's +7.81pp (both ~3x GSM8K). FineWeb bpb 0.5931 -> 0.5926.
-- **Caveat (run-to-run nondeterminism)**: base acc here is 61.98% vs 60.42% in the
-  main run — same model, same disjoint slice, same greedy decode. vLLM is not
-  bit-reproducible across runs under CUDA graphs + continuous batching, so base
-  eval itself wobbles by a few problems. The +7.3/+7.8pp ensemble gains are large
-  vs this noise, but absolute numbers carry ~+/-1.5pp run-to-run uncertainty.
+- **Going below 0.0005 does NOT help — it mildly hurts.** Per-sigma mean train reward:
+  0.0005 -> **0.6160** (n=259, sd 0.033, 27% of seeds above base), 0.0001 -> **0.6115**
+  (n=253, sd 0.028, 22% above base). 0.0005 edges 0.0001 by 0.0045 = **~1.7 SE** of the
+  difference: suggestive, not decisive, but it leans the *wrong* way for going smaller.
+  0.0001 also has fewer above-base seeds and a tighter spread — the "too gentle"
+  signature (rounds away on larger weights; ~25x weaker KL). So the smaller-is-better
+  trend from {5e-4,1e-3,2e-3} **bottoms out around 0.0005** rather than continuing.
+- **Ensemble still wins big**: base 61.98% -> K=25/K=10 **69.27% (+7.29 pp)**, matching
+  the main sweep's +7.81pp (both ~3x GSM8K). FineWeb bpb 0.5931 -> 0.5926.
+- **Caveat (run-to-run nondeterminism)**: base acc here is 61.98% vs 60.42% in the main
+  run — same model, same disjoint slice, same greedy decode. vLLM is not bit-reproducible
+  under CUDA graphs + continuous batching, so base eval itself wobbles a few problems.
+  The +7.3/+7.8pp ensemble gains are large vs this noise, but absolute numbers carry
+  ~+/-1.5pp run-to-run uncertainty.
+
