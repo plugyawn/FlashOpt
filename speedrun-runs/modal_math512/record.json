@@ -1,0 +1,37 @@
+{
+  "note": "Reconstructed from modal app logs ap-N9Avhwu6llwITs96PyWizs. MATH-500 levels 4-5, the harder task. Complete end-to-end (sampling+ensemble+FineWeb+5 probes).",
+  "git_commit": "c76e5f5",
+  "config_name": "run_512_7b_math500hard",
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "hardware": {"gpu": "NVIDIA H100", "gpu_count": 1},
+  "enforce_eager": false,
+  "cuda_graphs": {"captured": true},
+  "dataset": "math500 (levels 4-5)",
+  "population_size": 512,
+  "train_samples": 64,
+  "test_samples": 192,
+  "best_sigma": 0.0005,
+  "sigma_means": {"0.0005": 0.6192, "0.001": 0.6157, "0.002": 0.5844},
+  "sigma_n": {"0.0005": 168, "0.001": 170, "0.002": 174},
+  "seeds_per_sec": 0.07774234183749036,
+  "throughput": {"gen_tokens": 26004458, "gen_tokens_per_sec": 3705.80, "total_tokens_per_sec": 4371.04, "prompts_per_sec": 5.39},
+  "base_train_reward": 0.625,
+  "base_test_accuracy": 0.6041666666666666,
+  "ensemble_accuracy": {"25": 68.22916666666666, "10": 67.19},
+  "best_ensemble_accuracy": 68.22916666666666,
+  "ensemble_delta_pp": 7.81,
+  "fineweb": {
+    "base": {"bpb": 0.5931185072617601, "nats_per_token": 2.0539, "n_scored_tokens": 205145, "n_bytes": 1024861},
+    "ensemble": {"bpb": 0.5919947560229788, "nats_per_token": 2.0500},
+    "manifest_sha256": "4682737be5fde5aa4260eeb9e1a8755d46dc953d45bd5ccf6b38e46e7689642d"
+  },
+  "probes": [
+    {"rank": 1, "seed": 1596387268, "sigma": 0.001,  "train_reward": 0.703, "test_accuracy": 55.7, "fineweb_bpb": 0.6067},
+    {"rank": 2, "seed": 1085780955, "sigma": 0.0005, "train_reward": 0.703, "test_accuracy": 62.5, "fineweb_bpb": 0.5963},
+    {"rank": 3, "seed": 227939424,  "sigma": 0.001,  "train_reward": 0.703, "test_accuracy": 61.5, "fineweb_bpb": 0.6062},
+    {"rank": 4, "seed": 1362151373, "sigma": 0.0005, "train_reward": 0.703, "test_accuracy": 62.5, "fineweb_bpb": 0.5966},
+    {"rank": 5, "seed": 1243864388, "sigma": 0.001,  "train_reward": 0.703, "test_accuracy": 60.9, "fineweb_bpb": 0.6071}
+  ],
+  "timings_s": {"launch": 157.35, "sampling": 6585.86, "ensemble_eval": 401.54, "probes": 275.04, "fineweb": 197.26, "total": 7653.07},
+  "sampling_rewards_vary": true
+}

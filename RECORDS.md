@@ -119,4 +119,34 @@ record `speedrun-runs/modal_run512/record.json`:
 | 2026-05-30 | bf6e80b | smoke_1gpu_small | Qwen2.5-1.5B-Instruct | 1×NVIDIA L4 | 16 | 0.19 | — | — | 28.1% | 40.6% | 0.267 | 0.268 | 472s |
 | 2026-05-30 | 36abea5 | smoke_1gpu_small (+probe) | Qwen2.5-1.5B-Instruct | 1×NVIDIA L4 | 16 | 0.20 | 1316 | 5.88 | 28.1% | 40.6% | 0.267 | 0.268 | — |
 | 2026-05-30 | 27c5438 | tuned_1xh100 (graphs on) | Qwen2.5-7B-Instruct | 1×H100-80GB | 256 | 0.33 | 5296 | 20.9 | 90.6% | 90.6% | — | — | 1021s |
-| 2026-05-30 | e724a9a | run_512_7b_h100 | Qwen2.5-7B-Instruct | 1×H100-80GB | 512 | 0.28 | 9045 | 36.1 | 89.1% | 91.8% | 0.593 | 0.592 | 2915s |
+| 2026-05-30 | e724a9a | run_512_7b_h100 (GSM8K) | Qwen2.5-7B-Instruct | 1×H100-80GB | 512 | 0.28 | 9045 | 36.1 | 89.1% | 91.8% | 0.593 | 0.592 | 2915s |
+| 2026-05-30 | c76e5f5 | run_512_7b_math500hard | Qwen2.5-7B-Instruct | 1×H100-80GB | 512 | 0.08 | 3706 | 5.39 | 60.4% | 68.2% | 0.593 | 0.592 | 7653s |
+
+### Harder task = bigger ensemble win (the difficulty result)
+
+Same 7B / H100 / graphs-on / 512-seed setup, **only the task changed**: MATH-500
+**levels 4-5** (the hardest 262 problems, 64 train / 192 test disjoint) instead of
+GSM8K. `configs/run_512_7b_math500hard.yaml`, record `speedrun-runs/modal_math512/`.
+
+- **The ensemble lift nearly tripled vs GSM8K** — because the base has real
+  headroom (60%) instead of GSM8K's 89% ceiling:
+
+  | task | base acc | ensemble K=25 | Δ |
+  |------|---------:|--------------:|----:|
+  | GSM8K (saturated) | 89.06% | 91.80% | +2.73 pp |
+  | **MATH-500 lvl4-5** | **60.42%** | **68.23%** | **+7.81 pp** |
+
+  K=10 also +6.77 pp (67.19%). This is the payoff of picking a hard-but-not-floored
+  task (not AIME, which would be ~0-7% and noise-dominated).
+- **FineWeb bpb still improves**: base 0.5931 → ensemble 0.5920 (held-out, 205k
+  tokens). Both metrics move the right way, as on GSM8K.
+- **σ sweep** (per-σ mean train reward, ~170 seeds each): 0.0005→**0.6192**,
+  0.001→0.6157, 0.002→0.5844; best σ=0.0005 again. Note: on this harder task even
+  the best σ's *mean* sits just below base train (0.625) — the average perturbation
+  is mildly harmful at every σ; the win comes from the right tail + voting. (This
+  motivated a parallel low-σ {0.0005, 0.0001} run to probe below 0.0005.)
+- **Probes**: top individual seeds 55.7-62.5% test (vs 60.4% base) — some beat
+  base, some don't; none reach the 68.2% ensemble. Voting is doing the work.
+- **Throughput** much lower than GSM8K (0.08 vs 0.28 seeds/s, 3.7k vs 9k gen-tok/s)
+  because MATH generates full 2048-token solutions — that slowness is real
+  compute, not a stall. Total 7,653 s (sampling 6,586 s is the bulk).
