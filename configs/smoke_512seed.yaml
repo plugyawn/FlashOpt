@@ -17,10 +17,14 @@ precision: bfloat16
 
 tensor_parallel_size: 1
 num_engines: 1
-gpu_memory_utilization: 0.85     # 1.5B + base copy is tiny (~6GB); lots of KV
+# NOTE budget: the resident base-weights copy (~3GB for 1.5B bf16) is allocated
+# OUTSIDE vLLM's gpu_memory_utilization budget, and CUDA-graph capture needs its
+# own private pools. On a 22-24GB card, 0.85 leaves no headroom and OOMs at
+# capture/generate. 0.55 leaves ~10GB for base copy + graph pools + slack.
+gpu_memory_utilization: 0.55
 enforce_eager: false             # CUDA graphs on — main per-token win
-max_num_seqs: 256                # wide continuous batch over the train prompts
-max_model_len: 1536
+max_num_seqs: 128                # continuous batch over the train prompts
+max_model_len: 1280
 
 noise: rademacher
 kernel: auto

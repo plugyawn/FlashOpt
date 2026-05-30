@@ -131,8 +131,9 @@ def e2e_smoke(git_commit: str = "unknown", probe_top: int = 0):
     return _run_e2e("configs/smoke_1gpu_small.yaml", git_commit, probe_top, 32, 32)
 
 
-# 512-seed run: more data + a bigger GPU (A10G: CUDA graphs + headroom), still cheap.
-@app.function(gpu="A10G", image=e2e_image, timeout=5400)
+# 512-seed run: more data, on L4 (24GB, already validated). Memory budget in the
+# config leaves room for the resident base copy + CUDA-graph pools.
+@app.function(gpu="L4", image=e2e_image, timeout=5400)
 def e2e_512(git_commit: str = "unknown", probe_top: int = 5):
     return _run_e2e("configs/smoke_512seed.yaml", git_commit, probe_top, 80, 80)
 
