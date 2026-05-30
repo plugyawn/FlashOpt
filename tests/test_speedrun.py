@@ -39,6 +39,14 @@ class _RO:
         self.outputs = [_Comp(n_gen)]
 
 
+def test_fineweb_max_len_clamp():
+    # bpb pass requests 1 output token, so chunk must be < max_model_len.
+    assert S._fineweb_max_len(2048, 2048) == 2046     # clamped to mml-2
+    assert S._fineweb_max_len(1024, 2048) == 1024     # already smaller, unchanged
+    assert S._fineweb_max_len(2048, None) == 2048     # no engine cap -> unchanged
+    assert S._fineweb_max_len(4096, 1280) == 1278     # clamp to the engine limit
+
+
 def test_count_tokens():
     outs = [_RO(10, 5), _RO(8, 7), _RO(12, 0)]
     gen, prompt, n = S.count_tokens(outs)

@@ -84,8 +84,28 @@ tuned_1xh100.yaml`, 256 seeds), record `speedrun-runs/modal_7b/record.json`:
   near-ceiling base on so few samples. FineWeb skipped (config `build_if_missing:
   false`, no slice prebuilt). Use a larger test slice to get a real ensemble Δ.
 
+### 512-seed 7B/H100, larger slice (real ensemble gain; FineWeb bug found)
+
+Qwen2.5-7B on **1×H100**, graphs ON, **512 seeds**, GSM8K **128 train / 256 test**
+(`configs/run_512_7b_h100.yaml`), record `speedrun-runs/modal_run512/record.json`:
+
+- **Real ensemble gain on the non-saturated slice**: base **89.06%** (228/256) →
+  K=25 and K=10 ensemble **91.80%** (235/256), **+2.73 pp**. (The bigger test
+  slice is why this moves where the n=64 runs didn't.)
+- **Throughput** (512 seeds): **0.28 seeds/s, 8,862 gen-tok/s, 35.3 prompts/s**
+  (16.5M gen-tok in 1,857 s) — higher gen-tok/s than the 256-seed 7B run (wider
+  batch over 128 train prompts saturates the H100 better). Sampling rewards
+  varied 0.92–0.98 across all 512 seeds → graph+perturbation compat at scale. ✓
+- **σ sweep**: best σ=0.0005 (mean train reward 0.963), vs 0.955 @1e-3, 0.946 @2e-3.
+- ⚠️ **FineWeb crashed** this run: a held-out chunk tokenized to exactly
+  `max_model_len` (2048), and the bpb pass requests 1 output token →
+  `prompt_len+1 > max_model_len`. **Fixed** (clamp FineWeb chunk len to
+  `max_model_len−2`, `speedrun._fineweb_max_len` + regression test); bpb will be
+  produced on the re-run. Accuracy/throughput above completed before the crash.
+
 | date | commit | config | model | hardware | pop | seeds/s | gen-tok/s | prompts/s | base acc | ens acc | base bpb | ens bpb | total |
 |------|--------|--------|-------|----------|-----|---------|-----------|-----------|----------|---------|----------|---------|-------|
 | 2026-05-30 | bf6e80b | smoke_1gpu_small | Qwen2.5-1.5B-Instruct | 1×NVIDIA L4 | 16 | 0.19 | — | — | 28.1% | 40.6% | 0.267 | 0.268 | 472s |
 | 2026-05-30 | 36abea5 | smoke_1gpu_small (+probe) | Qwen2.5-1.5B-Instruct | 1×NVIDIA L4 | 16 | 0.20 | 1316 | 5.88 | 28.1% | 40.6% | 0.267 | 0.268 | — |
 | 2026-05-30 | 27c5438 | tuned_1xh100 (graphs on) | Qwen2.5-7B-Instruct | 1×H100-80GB | 256 | 0.33 | 5296 | 20.9 | 90.6% | 90.6% | — | — | 1021s |
+| 2026-05-30 | 77e1977 | run_512_7b_h100 | Qwen2.5-7B-Instruct | 1×H100-80GB | 512 | 0.28 | 8862 | 35.3 | 89.1% | 91.8% | (bug) | (bug) | — |

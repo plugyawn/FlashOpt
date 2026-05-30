@@ -405,10 +405,21 @@ def _fineweb_prepare(cfg, tokenizer):
             return None, None, None
     manifest_sha = fineweb.file_sha256(path)
     docs = fineweb.load_heldout(path)
-    chunks = fineweb.tokenize_docs_to_chunks(tokenizer, docs, max_len=fw.get("max_len", 2048))
+    max_len = _fineweb_max_len(fw.get("max_len", 2048), cfg.get("max_model_len"))
+    chunks = fineweb.tokenize_docs_to_chunks(tokenizer, docs, max_len=max_len)
     if fw.get("max_chunks"):
         chunks = chunks[:fw["max_chunks"]]
     return chunks, fineweb.heldout_total_bytes(docs), manifest_sha
+
+
+def _fineweb_max_len(max_len: int, max_model_len: Optional[int]) -> int:
+    """Cap the FineWeb chunk length so it fits the engine. The bpb pass calls
+    generate() with max_tokens=1, so a chunk of exactly max_model_len tokens
+    overflows (prompt_len + 1 > max_model_len). Reserve 2 tokens of slack (the +1
+    output token, plus any BOS that tokenize_docs_to_chunks prepends)."""
+    if max_model_len:
+        return min(max_len, max_model_len - 2)
+    return max_len
 
 
 def _bpb_for_current_weights(eng, chunks, total_bytes):
