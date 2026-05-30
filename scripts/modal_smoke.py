@@ -149,6 +149,13 @@ def e2e_7b(git_commit: str = "unknown", probe_top: int = 3):
     return _run_e2e("configs/tuned_1xh100.yaml", git_commit, probe_top, 64, 64)
 
 
+# 512-seed run: 7B on H100, larger GSM8K slice (128 train / 256 test) + PROPER
+# FineWeb bpb (real 256-doc slice). Long (~30-45min) -> run with `modal run --detach`.
+@app.function(gpu="H100", image=e2e_image, timeout=10800)
+def e2e_run512(git_commit: str = "unknown", probe_top: int = 5):
+    return _run_e2e("configs/run_512_7b_h100.yaml", git_commit, probe_top, 128, 256)
+
+
 def _host_commit():
     import subprocess
     try:
@@ -198,6 +205,10 @@ def main(tier: str = "1", probe_top: int = 0):
     if tier == "7b":
         res2 = e2e_7b.remote(git_commit=_host_commit(), probe_top=probe_top or 3)
         _report_e2e(res2, "modal_7b")
+        return
+    if tier == "run512":
+        res2 = e2e_run512.remote(git_commit=_host_commit(), probe_top=probe_top or 5)
+        _report_e2e(res2, "modal_run512")
         return
     # tier "2" runs ONLY the e2e (kernel already validated); "1"/"all" run kernel.
     if tier != "2":

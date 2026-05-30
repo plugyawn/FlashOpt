@@ -1,0 +1,49 @@
+# =============================================================================
+# RandOpt Speedrun — 512-seed run, Qwen2.5-7B on 1x H100-80GB, graphs ON
+# A real population (512) with a LARGER GSM8K slice and a PROPER held-out FineWeb
+# bpb eval (real 256-doc slice, 256 chunks, base + ensemble + per-seed probes).
+# Intended to run detached (`modal run --detach ... --tier run512`).
+# =============================================================================
+name: run_512_7b_h100
+
+hardware:
+  gpus: 1
+  gpu: "H100-80GB"
+  nodes: 1
+
+model: Qwen/Qwen2.5-7B-Instruct
+precision: bfloat16
+
+tensor_parallel_size: 1
+num_engines: 1
+# 7B (~15GB) + resident base copy (~15GB, OUTSIDE vLLM's budget) + CUDA-graph
+# pools. 0.65 -> ~52GB for vLLM weights+KV, ~28GB free for base+graphs+slack.
+gpu_memory_utilization: 0.65
+enforce_eager: false             # CUDA graphs ON (validated on 7B/H100)
+max_num_seqs: 512                # wide continuous batch over the train prompts
+max_model_len: 2048
+
+noise: rademacher
+kernel: auto
+
+dataset: gsm8k
+train_data_path: data/gsm8k/train.parquet
+test_data_path: data/gsm8k/test.parquet
+train_samples: 128               # hot loop = 512 seeds x 128 train prompts
+test_samples: 256                # LARGER slice -> less-noisy accuracy than n=64
+max_tokens: 512
+population_size: 512
+sigma_values: [0.0005, 0.001, 0.002]
+top_k_ratios: [0.02, 0.05]       # ensemble best ~10 and ~25 of 512
+global_seed: 42
+
+probe_top: 5                     # individually evaluate the 5 best seeds (acc+bpb)
+
+# ---- PROPER held-out FineWeb bpb -------------------------------------------
+fineweb:
+  path: eval/fineweb_heldout.jsonl
+  max_len: 2048
+  max_chunks: 256                # ~enough for a stable bpb estimate
+  ensemble: true                 # base + prob-averaged ensemble bpb
+  build_if_missing: true         # build a real 256-doc held-out slice on the pod
+  build_num_docs: 256
