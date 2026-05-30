@@ -38,8 +38,12 @@ e2e_image = (
     # debian_slim has no CUDA toolkit (nvcc); vLLM's default FlashInfer sampler
     # JIT-compiles a kernel at runtime and needs nvcc. Route sampling to the
     # native PyTorch top-k/top-p path instead (greedy decode is unaffected).
+    # On Hopper (H100) vLLM probes an FP8 DeepGEMM path during CUDA-graph warmup
+    # that needs the `deep_gemm` package (absent here). Our weights are bf16, so
+    # disable that path rather than ship the heavy build.
     .env({"VLLM_USE_FLASHINFER_SAMPLER": "0",
-          "VLLM_ENABLE_V1_MULTIPROCESSING": "0"})
+          "VLLM_ENABLE_V1_MULTIPROCESSING": "0",
+          "VLLM_USE_DEEP_GEMM": "0"})
     .add_local_dir(REPO, "/root/RandOpt", ignore=IGNORE)
 )
 
