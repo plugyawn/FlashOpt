@@ -1,0 +1,54 @@
+# =============================================================================
+# RandOpt Speedrun — 512-seed, Qwen2.5-7B on 1x H100-80GB, graphs ON
+# LOW-SIGMA variant of the MATH-500 lvl4-5 run. Identical to run_512_7b_math500hard
+# EXCEPT the sigma grid: {0.0005, 0.0001} (~half/half across the 512 seeds). Tests
+# whether going SMALLER than 0.0005 helps — in the GSM8K sweep 0.0005 was the
+# least-harmful (only subgroup whose mean edged above base), monotonically better
+# as sigma shrank, so this probes below it. Run detached (`--tier mathlow512`).
+# =============================================================================
+name: run_512_7b_math500hard_lowsigma
+
+hardware:
+  gpus: 1
+  gpu: "H100-80GB"
+  nodes: 1
+
+model: Qwen/Qwen2.5-7B-Instruct
+precision: bfloat16
+
+tensor_parallel_size: 1
+num_engines: 1
+# A first attempt stalled (KV/shm deadlock at batch 11/512): max_model_len=4096 +
+# util=0.65 + the ~15GB base copy (outside this budget) squeezed the KV pool so
+# 64 long 2048-tok generations wedged the engine. Give KV real room: util 0.72
+# (base copy still fits in (1-0.72)*80=22GB >= 15GB) and a tighter max_model_len.
+gpu_memory_utilization: 0.72
+enforce_eager: false             # CUDA graphs ON (validated on 7B/H100 GSM8K)
+max_num_seqs: 256                # narrower batch -> less KV pressure with long gens
+max_model_len: 3072              # 2048 gen + ~1k prompt headroom for MATH CoT
+
+noise: rademacher
+kernel: auto
+
+# ---- selection task: MATH-500, hardest levels --------------------------------
+dataset: math500
+# disjoint train/test produced by scripts/make_math500_hard.py --levels 4 5
+train_data_path: data/math-500-hard/train.jsonl
+test_data_path: data/math-500-hard/test.jsonl
+train_samples: 64                # only ~260 problems at levels 4-5 -> keep train
+test_samples: 192                # small so test can be larger; 64+192=256 fits
+max_tokens: 2048                 # MATH-500 needs long step-by-step solutions
+population_size: 512
+sigma_values: [0.0005, 0.0001]   # ~half/half across 512 seeds (verified ~259/253)
+top_k_ratios: [0.02, 0.05]
+global_seed: 42
+
+probe_top: 5
+
+fineweb:
+  path: eval/fineweb_heldout.jsonl
+  max_len: 2048                  # clamped to max_model_len-2 automatically
+  max_chunks: 256
+  ensemble: true
+  build_if_missing: true
+  build_num_docs: 256

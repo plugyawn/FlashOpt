@@ -176,6 +176,17 @@ def e2e_math512(git_commit: str = "unknown", probe_top: int = 5):
                     data_cmd=data_cmd)
 
 
+# Same MATH-500 lvl4-5 setup, LOW-SIGMA grid {0.0005, 0.0001} (~half/half) — tests
+# whether going smaller than 0.0005 helps. Identical otherwise (clean comparison).
+@app.function(gpu="H100", image=e2e_image, timeout=14400)
+def e2e_mathlow512(git_commit: str = "unknown", probe_top: int = 5):
+    import sys
+    data_cmd = [sys.executable, "scripts/make_math500_hard.py",
+                "--levels", "4", "5", "--n-train", "64", "--n-test", "192"]
+    return _run_e2e("configs/run_512_7b_math500hard_lowsigma.yaml", git_commit, probe_top, 64, 192,
+                    data_cmd=data_cmd)
+
+
 def _host_commit():
     import subprocess
     try:
@@ -233,6 +244,10 @@ def main(tier: str = "1", probe_top: int = 0):
     if tier == "math512":
         res2 = e2e_math512.remote(git_commit=_host_commit(), probe_top=probe_top or 5)
         _report_e2e(res2, "modal_math512")
+        return
+    if tier == "mathlow512":
+        res2 = e2e_mathlow512.remote(git_commit=_host_commit(), probe_top=probe_top or 5)
+        _report_e2e(res2, "modal_mathlow512")
         return
     # tier "2" runs ONLY the e2e (kernel already validated); "1"/"all" run kernel.
     if tier != "2":
