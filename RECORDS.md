@@ -65,7 +65,27 @@ base+sampling+ensemble generation phases). From the `--probe_top 3` L4 run:
   guarantee held-out gains; the **K=4 ensemble (40.6%) beat every individual
   seed**. (bpb per seed ≈ 0.270, flat vs base 0.2665, as expected at this scale.)
 
+### CUDA graphs at 7B (measured) — graphs + in-place perturbation are compatible
+
+Qwen2.5-7B-Instruct on a single **H100-80GB**, `enforce_eager=false` (`configs/
+tuned_1xh100.yaml`, 256 seeds), record `speedrun-runs/modal_7b/record.json`:
+
+- **Graphs captured fine**: "Capturing CUDA graphs (decode, FULL) 51/51 … finished
+  in 4 s, took 0.59 GiB" — one-time, amortized over the population.
+- **Correctness under graphs**: sampling rewards *vary across seeds* (0.94/0.95/
+  0.97/…), so replayed graphs read the freshly-perturbed weights — in-place
+  reconstruction is compatible with captured graphs at 7B. ✓ (the key claim.)
+- **Throughput**: **0.33 seeds/s, ~5.3k gen-tok/s, ~21 prompts/s** (≈7.8k
+  total-tok/s incl. prefill) — **4× the gen-tok/s of the eager 1.5B run** despite
+  a 4.7× larger model (graphs + H100 + `max_num_seqs=512`).
+- **Quality caveat**: base is already **90.6%** on this 64-sample GSM8K slice and
+  the K=25 ensemble is also 90.6% (+0.0) — *saturated at n=64*, not a method
+  result. A probe seed hit 93.8% individually; the ensemble can't move a
+  near-ceiling base on so few samples. FineWeb skipped (config `build_if_missing:
+  false`, no slice prebuilt). Use a larger test slice to get a real ensemble Δ.
+
 | date | commit | config | model | hardware | pop | seeds/s | gen-tok/s | prompts/s | base acc | ens acc | base bpb | ens bpb | total |
 |------|--------|--------|-------|----------|-----|---------|-----------|-----------|----------|---------|----------|---------|-------|
 | 2026-05-30 | bf6e80b | smoke_1gpu_small | Qwen2.5-1.5B-Instruct | 1×NVIDIA L4 | 16 | 0.19 | — | — | 28.1% | 40.6% | 0.267 | 0.268 | 472s |
 | 2026-05-30 | 36abea5 | smoke_1gpu_small (+probe) | Qwen2.5-1.5B-Instruct | 1×NVIDIA L4 | 16 | 0.20 | 1316 | 5.88 | 28.1% | 40.6% | 0.267 | 0.268 | — |
+| 2026-05-30 | 27c5438 | tuned_1xh100 (graphs on) | Qwen2.5-7B-Instruct | 1×H100-80GB | 256 | 0.33 | 5296 | 20.9 | 90.6% | 90.6% | — | — | 1021s |
