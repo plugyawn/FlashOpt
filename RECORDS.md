@@ -84,28 +84,39 @@ tuned_1xh100.yaml`, 256 seeds), record `speedrun-runs/modal_7b/record.json`:
   near-ceiling base on so few samples. FineWeb skipped (config `build_if_missing:
   false`, no slice prebuilt). Use a larger test slice to get a real ensemble Δ.
 
-### 512-seed 7B/H100, larger slice (real ensemble gain; FineWeb bug found)
+### 512-seed 7B/H100, larger slice + proper FineWeb (the headline run)
 
-Qwen2.5-7B on **1×H100**, graphs ON, **512 seeds**, GSM8K **128 train / 256 test**
-(`configs/run_512_7b_h100.yaml`), record `speedrun-runs/modal_run512/record.json`:
+Qwen2.5-7B on **1×H100**, graphs ON, **512 seeds**, GSM8K **128 train / 256 test**,
+held-out FineWeb = real 256-doc slice (sha `4682737b…`), `configs/run_512_7b_h100.yaml`,
+record `speedrun-runs/modal_run512/record.json`:
 
-- **Real ensemble gain on the non-saturated slice**: base **89.06%** (228/256) →
-  K=25 and K=10 ensemble **91.80%** (235/256), **+2.73 pp**. (The bigger test
-  slice is why this moves where the n=64 runs didn't.)
-- **Throughput** (512 seeds): **0.28 seeds/s, 8,862 gen-tok/s, 35.3 prompts/s**
-  (16.5M gen-tok in 1,857 s) — higher gen-tok/s than the 256-seed 7B run (wider
-  batch over 128 train prompts saturates the H100 better). Sampling rewards
-  varied 0.92–0.98 across all 512 seeds → graph+perturbation compat at scale. ✓
-- **σ sweep**: best σ=0.0005 (mean train reward 0.963), vs 0.955 @1e-3, 0.946 @2e-3.
-- ⚠️ **FineWeb crashed** this run: a held-out chunk tokenized to exactly
-  `max_model_len` (2048), and the bpb pass requests 1 output token →
-  `prompt_len+1 > max_model_len`. **Fixed** (clamp FineWeb chunk len to
-  `max_model_len−2`, `speedrun._fineweb_max_len` + regression test); bpb will be
-  produced on the re-run. Accuracy/throughput above completed before the crash.
+- **Ensemble gain (both metrics improve):**
+  - GSM8K: base **89.06%** (228/256) → K=25 **91.80%** (235/256, **+2.73 pp**),
+    K=10 91.41% (+2.34 pp).
+  - Held-out FineWeb **bpb**: base **0.5932** → ensemble **0.5918** (lower=better,
+    over 205k scored tokens / 1.02 MB). Small but the *right direction* — the
+    task-selected ensemble nudged generic LM held-out loss down, not up.
+- **Throughput** (512 seeds): **0.28 seeds/s, 9,045 gen-tok/s, 36.1 prompts/s**
+  (18.1M gen-tok; ~13.3k total-tok/s incl. prefill). Higher gen-tok/s than the
+  256-seed run — wider batch over 128 train prompts saturates the H100 better.
+  Sampling rewards varied 0.92–0.98 across all 512 seeds → graph+perturbation
+  compatibility holds at full scale. ✓
+- **Per-seed probes (top 5, evaluated standalone):** individual test acc ranges
+  87.9–91.0% (vs 89.06% base) — i.e. some single seeds beat base, some don't, and
+  none reliably beats the **91.8% ensemble**; per-seed bpb 0.596–0.649, all worse
+  than the ensemble's 0.592. Voting helps on both metrics. Best σ=0.0005.
+- Wall-clock 2,915 s total (sampling 1,861 s · ensemble 134 s · probes 375 s ·
+  FineWeb 222 s · launch 306 s).
+
+> The earlier `77e1977` attempt produced the accuracy/throughput above but
+> **crashed in FineWeb** (a held-out chunk tokenized to exactly `max_model_len`,
+> and the bpb pass requests 1 output token → `prompt_len+1 > max_model_len`).
+> Fixed in `e724a9a` (`speedrun._fineweb_max_len` clamps chunk len to
+> `max_model_len−2`, + regression test); this re-run completed the bpb.
 
 | date | commit | config | model | hardware | pop | seeds/s | gen-tok/s | prompts/s | base acc | ens acc | base bpb | ens bpb | total |
 |------|--------|--------|-------|----------|-----|---------|-----------|-----------|----------|---------|----------|---------|-------|
 | 2026-05-30 | bf6e80b | smoke_1gpu_small | Qwen2.5-1.5B-Instruct | 1×NVIDIA L4 | 16 | 0.19 | — | — | 28.1% | 40.6% | 0.267 | 0.268 | 472s |
 | 2026-05-30 | 36abea5 | smoke_1gpu_small (+probe) | Qwen2.5-1.5B-Instruct | 1×NVIDIA L4 | 16 | 0.20 | 1316 | 5.88 | 28.1% | 40.6% | 0.267 | 0.268 | — |
 | 2026-05-30 | 27c5438 | tuned_1xh100 (graphs on) | Qwen2.5-7B-Instruct | 1×H100-80GB | 256 | 0.33 | 5296 | 20.9 | 90.6% | 90.6% | — | — | 1021s |
-| 2026-05-30 | 77e1977 | run_512_7b_h100 | Qwen2.5-7B-Instruct | 1×H100-80GB | 512 | 0.28 | 8862 | 35.3 | 89.1% | 91.8% | (bug) | (bug) | — |
+| 2026-05-30 | e724a9a | run_512_7b_h100 | Qwen2.5-7B-Instruct | 1×H100-80GB | 512 | 0.28 | 9045 | 36.1 | 89.1% | 91.8% | 0.593 | 0.592 | 2915s |
