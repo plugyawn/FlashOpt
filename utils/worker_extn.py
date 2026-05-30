@@ -86,6 +86,31 @@ class WorkerExtension:
         self._kernel = kernel
         return True
 
+    def warmup_kernels(self):
+        """Trigger Triton JIT compilation of the reconstruct/switch kernels NOW
+        (at launch), so it doesn't happen mid-inference. A cold first call inside
+        the sampling loop logs 'Triton JIT compilation during inference' and can
+        stall under CUDA graphs; compiling against the real param dtype/device up
+        front avoids that. Runs on a throwaway buffer (never touches live weights)."""
+        try:
+            params = list(self.model_runner.model.named_parameters())
+            if not params:
+                return True
+            p = params[0][1]
+            buf = torch.empty(1024, dtype=p.dtype, device=p.device)
+            base = torch.zeros_like(buf)
+            perturb.reconstruct_into(buf, base, 0, 1e-3, 0,
+                                     noise=getattr(self, "_noise", "rademacher"),
+                                     kernel=getattr(self, "_kernel", None))
+            if getattr(self, "_noise", "rademacher") == "rademacher":
+                perturb.switch_inplace(buf, 0, 1, 1e-3, 0,
+                                       kernel=getattr(self, "_kernel", None))
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+        except Exception as e:  # warmup is best-effort; never fail launch on it
+            print(f"[warmup_kernels] skipped: {type(e).__name__}: {e}")
+        return True
+
     def _reconstruct(self, seed, sigma):
         """Set every perturbable param to base + sigma*R(seed, .) in ONE fused
         pass (no noise materialised on the Triton path). One synchronize at the

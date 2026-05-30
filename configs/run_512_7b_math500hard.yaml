@@ -17,10 +17,14 @@ precision: bfloat16
 
 tensor_parallel_size: 1
 num_engines: 1
-gpu_memory_utilization: 0.65     # 7B + resident base copy + CUDA-graph pools
-enforce_eager: false             # CUDA graphs ON (validated on 7B/H100)
-max_num_seqs: 512
-max_model_len: 4096              # MATH CoT is long; room for 2048-tok prompts+gen
+# A first attempt stalled (KV/shm deadlock at batch 11/512): max_model_len=4096 +
+# util=0.65 + the ~15GB base copy (outside this budget) squeezed the KV pool so
+# 64 long 2048-tok generations wedged the engine. Give KV real room: util 0.72
+# (base copy still fits in (1-0.72)*80=22GB >= 15GB) and a tighter max_model_len.
+gpu_memory_utilization: 0.72
+enforce_eager: false             # CUDA graphs ON (validated on 7B/H100 GSM8K)
+max_num_seqs: 256                # narrower batch -> less KV pressure with long gens
+max_model_len: 3072              # 2048 gen + ~1k prompt headroom for MATH CoT
 
 noise: rademacher
 kernel: auto

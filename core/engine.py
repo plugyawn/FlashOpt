@@ -143,6 +143,9 @@ def launch_engines(num_engines: int, model_name: str, precision: str = "bfloat16
         ray.get([e.collective_rpc.remote("configure_perturbation", args=(noise, kernel))
                  for e in batch_engines])
         ray.get([e.collective_rpc.remote("store_base_weights", args=()) for e in batch_engines])
+        # Pre-compile the Triton reconstruct/switch kernels at launch so the JIT
+        # doesn't fire mid-inference (a cold first call can stall under CUDA graphs).
+        ray.get([e.collective_rpc.remote("warmup_kernels", args=()) for e in batch_engines])
         print(f"  Batch {batch_idx + 1} initialized in {time.time() - batch_start:.1f}s "
               f"(noise={noise}, kernel={kernel}, enforce_eager={enforce_eager})")
         engines.extend(batch_engines)
