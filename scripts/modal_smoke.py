@@ -112,15 +112,21 @@ def throughput():
     return out
 
 
-def _run_e2e(config: str, git_commit: str, probe_top: int, n_train: int, n_test: int):
-    """Shared e2e body: prep GSM8K data, run the speedrun for `config`, return record."""
+def _run_e2e(config: str, git_commit: str, probe_top: int, n_train: int, n_test: int,
+             data_cmd: list = None):
+    """Shared e2e body: prep dataset, run the speedrun for `config`, return record.
+
+    data_cmd: explicit data-prep argv (default = GSM8K). MATH passes its own.
+    """
     import os, sys, subprocess, glob, json
     os.chdir("/root/RandOpt")
     # git isn't installed in the container; pass the host commit through so the
     # record's provenance is real.
     env = dict(os.environ, PYTHONPATH="/root/RandOpt", RANDOPT_GIT_COMMIT=git_commit)
-    subprocess.run([sys.executable, "scripts/make_gsm8k_smoke.py",
-                    "--n-train", str(n_train), "--n-test", str(n_test)], check=True, env=env)
+    if data_cmd is None:
+        data_cmd = [sys.executable, "scripts/make_gsm8k_smoke.py",
+                    "--n-train", str(n_train), "--n-test", str(n_test)]
+    subprocess.run(data_cmd, check=True, env=env)
     cmd = [sys.executable, "speedrun.py", "--config", config]
     if probe_top:
         cmd += ["--probe_top", str(probe_top)]
@@ -154,6 +160,17 @@ def e2e_7b(git_commit: str = "unknown", probe_top: int = 3):
 @app.function(gpu="H100", image=e2e_image, timeout=10800)
 def e2e_run512(git_commit: str = "unknown", probe_top: int = 5):
     return _run_e2e("configs/run_512_7b_h100.yaml", git_commit, probe_top, 128, 256)
+
+
+# 512-seed run on a HARDER task: MATH-500 levels 4-5 (base has real headroom vs
+# GSM8K's ~89% ceiling). Same 7B/H100/graphs/population — only difficulty changes.
+@app.function(gpu="H100", image=e2e_image, timeout=14400)
+def e2e_math512(git_commit: str = "unknown", probe_top: int = 5):
+    import sys
+    data_cmd = [sys.executable, "scripts/make_math500_hard.py",
+                "--levels", "4", "5", "--n-train", "64", "--n-test", "192"]
+    return _run_e2e("configs/run_512_7b_math500hard.yaml", git_commit, probe_top, 64, 192,
+                    data_cmd=data_cmd)
 
 
 def _host_commit():
@@ -209,6 +226,10 @@ def main(tier: str = "1", probe_top: int = 0):
     if tier == "run512":
         res2 = e2e_run512.remote(git_commit=_host_commit(), probe_top=probe_top or 5)
         _report_e2e(res2, "modal_run512")
+        return
+    if tier == "math512":
+        res2 = e2e_math512.remote(git_commit=_host_commit(), probe_top=probe_top or 5)
+        _report_e2e(res2, "modal_math512")
         return
     # tier "2" runs ONLY the e2e (kernel already validated); "1"/"all" run kernel.
     if tier != "2":
