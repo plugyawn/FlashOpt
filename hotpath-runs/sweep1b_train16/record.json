@@ -1,0 +1,70 @@
+{
+  "timestamp": "2026-05-31T12:02:39",
+  "git_commit": "4cb4d4d",
+  "config_name": "hotpath_1b_sweep",
+  "model": "Qwen/Qwen2.5-1.5B-Instruct",
+  "dataset": "math500",
+  "hardware": {
+    "gpu": "NVIDIA L4",
+    "gpu_count": 1
+  },
+  "noise": "rademacher",
+  "sigma_values": [
+    0.0005
+  ],
+  "population_size": 64,
+  "train_samples": 16,
+  "test_samples": 96,
+  "base_train_reward": 0.375,
+  "base_test_accuracy": 35.416666666666664,
+  "best_k1_test": {
+    "test_acc": 42.708333333333336,
+    "seed": 1068999192,
+    "sigma": 0.0005,
+    "train_reward": 0.25,
+    "delta_vs_base": 7.291666666666671
+  },
+  "k1_selected_by_train": {
+    "test_acc": 37.5,
+    "seed": 2084558117,
+    "sigma": 0.0005,
+    "train_reward": 0.4375,
+    "delta_vs_base": 2.0833333333333357
+  },
+  "train_test_spearman": 0.019383086775799963,
+  "frac_seeds_beating_base_test": 0.390625,
+  "throughput": {
+    "gen_tokens": 4344366,
+    "prompt_tokens": 965055,
+    "prompts": 7280,
+    "gen_seconds": 2579.2266821360004,
+    "gen_tokens_per_sec": 1684.3676556580092,
+    "total_tokens_per_sec": 2058.5321316554364,
+    "prompts_per_sec": 2.822551445525148,
+    "per_phase": {
+      "base_eval": {
+        "gen_tokens": 65407,
+        "prompt_tokens": 14847,
+        "prompts": 112,
+        "seconds": 41.212021909,
+        "gen_tok_per_sec": 1587.0854418262898,
+        "prompts_per_sec": 2.7176536071757527
+      },
+      "sampling": {
+        "gen_tokens": 65714,
+        "prompt_tokens": 14847,
+        "prompts": 112,
+        "seconds": 2538.014660227,
+        "gen_tok_per_sec": 0.0,
+        "prompts_per_sec": 0.0
+      }
+    }
+  },
+  "timings_s": {
+    "launch": 94.19813651,
+    "base_eval": 41.212021909,
+    "sampling": 2538.014660227,
+    "total": 2681.14754898
+  },
+  "seeds_jsonl": "seeds.jsonl"
+}

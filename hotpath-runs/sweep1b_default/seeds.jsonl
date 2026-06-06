@@ -11,7 +11,7 @@
 {"idx": 10, "seed": 1662057910, "sigma": 0.0005, "train_reward": 0.328125, "test_acc": 34.375, "test_correct": 33, "n_test": 96}
 {"idx": 11, "seed": 1678403300, "sigma": 0.0005, "train_reward": 0.28125, "test_acc": 35.416666666666664, "test_correct": 34, "n_test": 96}
 {"idx": 12, "seed": 145857091, "sigma": 0.0005, "train_reward": 0.34375, "test_acc": 30.208333333333332, "test_correct": 29, "n_test": 96}
-{"idx": 13, "seed": 487991431, "sigma": 0.0005, "train_reward": 0.296875, "test_acc": 35.416666666666664, "test_correct": 34, "n_test": 96}
+{"idx": 13, "seed": 487991431, "sigma": 0.0005, "train_reward": 0.296875, "test_acc": 34.375, "test_correct": 33, "n_test": 96}
 {"idx": 14, "seed": 184566849, "sigma": 0.0005, "train_reward": 0.296875, "test_acc": 34.375, "test_correct": 33, "n_test": 96}
 {"idx": 15, "seed": 432652522, "sigma": 0.0005, "train_reward": 0.34375, "test_acc": 33.333333333333336, "test_correct": 32, "n_test": 96}
 {"idx": 16, "seed": 1981113447, "sigma": 0.0005, "train_reward": 0.390625, "test_acc": 37.5, "test_correct": 36, "n_test": 96}
@@ -49,7 +49,7 @@
 {"idx": 48, "seed": 197860366, "sigma": 0.0005, "train_reward": 0.390625, "test_acc": 34.375, "test_correct": 33, "n_test": 96}
 {"idx": 49, "seed": 1171300094, "sigma": 0.0005, "train_reward": 0.359375, "test_acc": 37.5, "test_correct": 36, "n_test": 96}
 {"idx": 50, "seed": 2095132995, "sigma": 0.0005, "train_reward": 0.359375, "test_acc": 31.25, "test_correct": 30, "n_test": 96}
-{"idx": 51, "seed": 275121925, "sigma": 0.0005, "train_reward": 0.328125, "test_acc": 33.333333333333336, "test_correct": 32, "n_test": 96}
+{"idx": 51, "seed": 275121925, "sigma": 0.0005, "train_reward": 0.328125, "test_acc": 34.375, "test_correct": 33, "n_test": 96}
 {"idx": 52, "seed": 94067870, "sigma": 0.0005, "train_reward": 0.28125, "test_acc": 38.541666666666664, "test_correct": 37, "n_test": 96}
 {"idx": 53, "seed": 1777324386, "sigma": 0.0005, "train_reward": 0.34375, "test_acc": 37.5, "test_correct": 36, "n_test": 96}
 {"idx": 54, "seed": 1497586399, "sigma": 0.0005, "train_reward": 0.328125, "test_acc": 32.291666666666664, "test_correct": 31, "n_test": 96}
@@ -60,5 +60,5 @@
 {"idx": 59, "seed": 929893112, "sigma": 0.0005, "train_reward": 0.359375, "test_acc": 36.458333333333336, "test_correct": 35, "n_test": 96}
 {"idx": 60, "seed": 392022352, "sigma": 0.0005, "train_reward": 0.328125, "test_acc": 39.583333333333336, "test_correct": 38, "n_test": 96}
 {"idx": 61, "seed": 1173749068, "sigma": 0.0005, "train_reward": 0.328125, "test_acc": 37.5, "test_correct": 36, "n_test": 96}
-{"idx": 62, "seed": 1074497534, "sigma": 0.0005, "train_reward": 0.34375, "test_acc": 33.333333333333336, "test_correct": 32, "n_test": 96}
+{"idx": 62, "seed": 1074497534, "sigma": 0.0005, "train_reward": 0.34375, "test_acc": 34.375, "test_correct": 33, "n_test": 96}
 {"idx": 63, "seed": 864178252, "sigma": 0.0005, "train_reward": 0.328125, "test_acc": 35.416666666666664, "test_correct": 34, "n_test": 96}
