@@ -1,0 +1,8 @@
+{"idx": 0, "seed": 184566854, "sigma": 0.0005, "train_reward": 0.21875, "test_acc": 34.375, "test_correct": 66, "n_test": 192}
+{"idx": 1, "seed": 1497586439, "sigma": 0.0005, "train_reward": 0.34375, "test_acc": 39.0625, "test_correct": 75, "n_test": 192}
+{"idx": 2, "seed": 1843824991, "sigma": 0.0005, "train_reward": 0.328125, "test_acc": 34.895833333333336, "test_correct": 67, "n_test": 192}
+{"idx": 3, "seed": 1405681629, "sigma": 0.0005, "train_reward": 0.265625, "test_acc": 34.375, "test_correct": 66, "n_test": 192}
+{"idx": 4, "seed": 929893136, "sigma": 0.0005, "train_reward": 0.265625, "test_acc": 36.458333333333336, "test_correct": 70, "n_test": 192}
+{"idx": 5, "seed": 942484270, "sigma": 0.0005, "train_reward": 0.328125, "test_acc": 35.9375, "test_correct": 69, "n_test": 192}
+{"idx": 6, "seed": 191664963, "sigma": 0.0005, "train_reward": 0.296875, "test_acc": 34.895833333333336, "test_correct": 67, "n_test": 192}
+{"idx": 7, "seed": 1662057953, "sigma": 0.0005, "train_reward": 0.3125, "test_acc": 34.895833333333336, "test_correct": 67, "n_test": 192}
