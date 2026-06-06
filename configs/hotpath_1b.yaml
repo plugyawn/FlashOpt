@@ -1,0 +1,41 @@
+# =============================================================================
+# RandOpt research HOTPATH — Qwen2.5-1.5B-Instruct on 1x L4, K=1-on-test.
+# The cheap/fast iteration model for the research loop (train-size, grouping,
+# level-5, sigma sweeps). 7B is used only to confirm the chosen scheme.
+#
+# Eager (no graphs) — 1.5B is tiny and the run is short; avoids capture overhead
+# and the graph-stall debugging surface. Per-seed loop evals BOTH train + test.
+# =============================================================================
+name: hotpath_1b
+
+model: Qwen/Qwen2.5-1.5B-Instruct
+precision: bfloat16
+
+tensor_parallel_size: 1
+num_engines: 1
+gpu_memory_utilization: 0.85     # 1.5B + base copy ~6GB on a 24GB L4; lots of KV
+enforce_eager: true
+max_num_seqs: 256
+max_model_len: 3072              # 2048 gen + prompt headroom for MATH CoT
+
+noise: rademacher
+kernel: auto
+
+dataset: math500
+train_data_path: data/math-500-hard/train.jsonl
+test_data_path: data/math-500-hard/test.jsonl
+train_samples: 64
+test_samples: 192
+max_tokens: 2048
+population_size: 64               # cheap default; bump per experiment
+sigma_values: [0.0005]            # single sigma per hotpath run (sweep across runs)
+global_seed: 42
+
+# FineWeb bpb per-seed is OFF by default (slow); flip fineweb.on_probe to add it.
+fineweb:
+  on_probe: false
+  path: eval/fineweb_heldout.jsonl
+  max_len: 1024
+  max_chunks: 32
+  build_if_missing: true
+  build_num_docs: 48

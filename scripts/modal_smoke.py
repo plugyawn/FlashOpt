@@ -187,6 +187,50 @@ def e2e_mathlow512(git_commit: str = "unknown", probe_top: int = 5):
                     data_cmd=data_cmd)
 
 
+# ---- K=1 research HOTPATH (hotpath.py): per-seed train+test, no ensemble ------
+def _run_hotpath(config, git_commit, population, sigma, noise, train_samples,
+                 data_args, run_name):
+    """Prep a MATH-500 split (data_args -> make_math500_hard.py), run hotpath.py,
+    return its record.json. data_args is the list after 'make_math500_hard.py'."""
+    import os, sys, subprocess, glob, json
+    os.chdir("/root/RandOpt")
+    env = dict(os.environ, PYTHONPATH="/root/RandOpt", RANDOPT_GIT_COMMIT=git_commit,
+               PYTHONUNBUFFERED="1")
+    subprocess.run([sys.executable, "scripts/make_math500_hard.py"] + data_args, check=True, env=env)
+    cmd = [sys.executable, "hotpath.py", "--config", config, "--run-name", run_name]
+    if population: cmd += ["--population", str(population)]
+    if sigma:      cmd += ["--sigma", str(sigma)]
+    if noise:      cmd += ["--noise", noise]
+    if train_samples: cmd += ["--train-samples", str(train_samples)]
+    r = subprocess.run(cmd, env=env)
+    recs = sorted(glob.glob("hotpath-runs/*/record.json"), key=os.path.getmtime)
+    rec, seeds = {}, []
+    if recs:
+        rd = os.path.dirname(recs[-1])
+        rec = json.load(open(recs[-1]))
+        sp = os.path.join(rd, "seeds.jsonl")
+        if os.path.exists(sp):
+            seeds = [json.loads(l) for l in open(sp) if l.strip()]
+    return {"tier": "hotpath", "config": config, "returncode": r.returncode,
+            "run_name": run_name, "record": rec, "seeds": seeds}
+
+
+@app.function(gpu="L4", image=e2e_image, timeout=7200)
+def hotpath_1b(git_commit="unknown", population=64, sigma="0.0005", noise="rademacher",
+               train_samples=64, data_args=None, run_name="hp1b"):
+    da = data_args or ["--levels", "4", "5", "--n-train", "64", "--n-test", "192"]
+    return _run_hotpath("configs/hotpath_1b.yaml", git_commit, population, sigma, noise,
+                        train_samples, da, run_name)
+
+
+@app.function(gpu="H100", image=e2e_image, timeout=10800)
+def hotpath_7b(git_commit="unknown", population=128, sigma="0.0005", noise="rademacher",
+               train_samples=64, data_args=None, run_name="hp7b"):
+    da = data_args or ["--levels", "4", "5", "--n-train", "64", "--n-test", "192"]
+    return _run_hotpath("configs/hotpath_7b.yaml", git_commit, population, sigma, noise,
+                        train_samples, da, run_name)
+
+
 def _host_commit():
     import subprocess
     try:
@@ -213,9 +257,45 @@ def _report_e2e(res2, save_name):
         print(f"wrote speedrun-runs/{save_name}/record.json")
 
 
-@app.local_entrypoint()
-def main(tier: str = "1", probe_top: int = 0):
+def _report_hotpath(res, save_name):
     import json
+    rec = res.get("record") or {}
+    print("\n================ HOTPATH RESULT ================")
+    print("config:", res.get("config"), "| returncode:", res.get("returncode"))
+    keys = ["model", "population_size", "train_samples", "test_samples", "noise",
+            "sigma_values", "base_test_accuracy", "best_k1_test",
+            "k1_selected_by_train", "train_test_spearman", "frac_seeds_beating_base_test"]
+    print(json.dumps({k: rec.get(k) for k in keys}, indent=2, default=float))
+    if rec:
+        d = os.path.join(REPO, "hotpath-runs", save_name)
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "record.json"), "w") as f:
+            json.dump(rec, f, indent=2)
+        with open(os.path.join(d, "seeds.jsonl"), "w") as f:
+            for row in res.get("seeds", []):
+                f.write(json.dumps(row) + "\n")
+        print(f"wrote hotpath-runs/{save_name}/  (record.json + seeds.jsonl)")
+
+
+@app.local_entrypoint()
+def main(tier: str = "1", probe_top: int = 0,
+         population: int = 0, sigma: str = "", noise: str = "",
+         train_samples: int = 0, data_args: str = "", run_name: str = ""):
+    import json
+    # --- K=1 research hotpath tiers (1B fast / 7B confirm) ---
+    if tier in ("hotpath_1b", "hotpath_7b"):
+        fn = hotpath_1b if tier == "hotpath_1b" else hotpath_7b
+        kw = dict(git_commit=_host_commit())
+        if population: kw["population"] = population
+        if sigma: kw["sigma"] = sigma
+        if noise: kw["noise"] = noise
+        if train_samples: kw["train_samples"] = train_samples
+        if data_args: kw["data_args"] = data_args.split()
+        rn = run_name or tier
+        kw["run_name"] = rn
+        res = fn.remote(**kw)
+        _report_hotpath(res, rn)
+        return
     if tier == "throughput":
         res = throughput.remote()
         print("\n================ GPU THROUGHPUT ================")
