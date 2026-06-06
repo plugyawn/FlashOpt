@@ -103,6 +103,9 @@ def main():
     ap.add_argument("--n-test", type=int, default=192)
     ap.add_argument("--out", default="data/math-500-hard")
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--emit-fresh", action="store_true",
+                    help="also write fresh.jsonl = lvl4-5 problems NOT in train OR test "
+                         "(for an unbiased pass@k slice the selected seed never saw)")
     args = ap.parse_args()
 
     test_levels = sorted(set(args.levels))
@@ -137,7 +140,13 @@ def main():
         print(f"  WARNING: only {len(train)} train rows (wanted {args.n_train}) at levels {train_levels}")
 
     os.makedirs(args.out, exist_ok=True)
-    for name, split in [("train.jsonl", train), ("test.jsonl", test)]:
+    splits = [("train.jsonl", train), ("test.jsonl", test)]
+    if args.emit_fresh:
+        used = {r["problem"] for r in train} | test_ids
+        fresh = [r for r in pool if r["level"] in set(test_levels) and r["problem"] not in used]
+        splits.append(("fresh.jsonl", fresh))
+        print(f"FRESH n={len(fresh)} (lvl4-5 not in train/test) -> unbiased pass@k slice")
+    for name, split in splits:
         with open(os.path.join(args.out, name), "w", encoding="utf-8") as f:
             for r in split:
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
