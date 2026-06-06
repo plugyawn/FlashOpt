@@ -25,14 +25,16 @@ so absolute acc carries ~±1.5pp run-to-run noise.
 
 ---
 
-## Baselines (unperturbed, MATH-500 lvl4-5 test)
+## Baselines (unperturbed, MATH-500 lvl4-5 test, greedy)
 
 | model | test slice | base acc |
 |-------|-----------|---------:|
-| Qwen2.5-1.5B-Instruct | lvl4-5, n=192 (default split) | **53.1%** (102/192) |
-| Qwen2.5-7B-Instruct   | lvl4-5, n=192 (default split) | ~60.4% (from prior 512-runs; 61.98% on a re-run — ±1.5pp run-to-run) |
+| Qwen2.5-1.5B-Instruct | lvl4-5, n=192 | **38.0%** (73/192) |
+| Qwen2.5-1.5B-Instruct | lvl4-5, n=96 (sweep slice) | **35.4%** (34/96) |
+| Qwen2.5-7B-Instruct   | lvl4-5, n=192 | ~60.4% (prior 512-runs; 61.98% on a re-run — ±1.5pp run-to-run) |
 
-(7B lvl5-only and stratified baselines: TODO as the sweep runs.)
+The 1.5B base differs by slice (38.0% on n=192 vs 35.4% on the n=96 sweep slice) —
+small-n sampling, within noise. (7B lvl5-only/stratified baselines: TODO.)
 
 ---
 
@@ -55,13 +57,37 @@ Each cell reports base / best-oracle / by-train / ρ / frac>base, plus a plot.
 
 ## Runs
 
-### R0 — hotpath validation smoke (1.5B, pop=8)
-`hp1b_smoke` · default lvl4-5 split · σ=5e-4 · rademacher · L4.
-- base **53.1%** · best-K1 oracle 57.8% (+4.7) · K1-by-train 54.2% (+1.0) · ρ=0.29 · frac>base 50%.
-- Purpose was to validate the K=1 instrument end-to-end on GPU (✓). n=8 is far too
-  small to conclude anything — but already shows the central tension: the *oracle*
-  best seed gains +4.7pp while the *train-selected* one gains only +1.0pp, i.e.
-  train reward is a weak selector at this scale (ρ=0.29). The real sweep tests
-  whether train-set design closes that oracle↔realistic gap.
+### R0 — hotpath validation smoke (1.5B, pop=8, n=192)
+`hp1b_smoke` — validated the K=1 instrument end-to-end on GPU (✓). base 38.0%,
+oracle/by-train both 39.1%, ρ=0.64, frac>base 12.5%. n=8 is far too small to
+conclude anything; recorded only as the instrument check.
 
-(further runs appended as the sweep completes)
+### R1 — sweep1b: does train-set DESIGN improve K=1 transfer? (1.5B, pop=64, n=96)
+4 cells, σ=5e-4, rademacher, L4. Same held-out n=96 test. **2/4 cells completed**
+(`stratify`/`train16` OOM'd at gpu_mem_util=0.85 on the 22GB L4 — config fixed to
+0.55, re-running).
+
+| cell | train | base | best-K1 oracle | **K1 by train** | ρ(train,test) | frac>base |
+|------|-------|-----:|---------------:|----------------:|--------------:|----------:|
+| default   | 64 lvl4-5 random | 35.4% | 42.7% (+7.3) | **38.5% (+3.1)** | **−0.083** | 39% |
+| lvl5train | 64 lvl5-only     | 35.4% | 42.7% (+7.3) | **36.5% (+1.0)** | **−0.153** | 39% |
+| stratify  | — | (OOM, re-running) | | | | |
+| train16   | — | (OOM, re-running) | | | | |
+
+**The central K=1 finding (from the 2 valid cells):**
+- **Good perturbations exist** — oracle-best single seed gains **+7.3pp** (35.4→42.7%),
+  and 39% of seeds beat base on test. The *population* contains real winners.
+- **But train reward cannot find them.** Spearman ρ(train, test) ≈ **0 to negative**
+  (−0.08, −0.15). Selecting K=1 by train reward gets only +3.1 / +1.0pp — far below
+  the +7.3 oracle. On a 64-problem train set, train reward is ~noise as a held-out
+  predictor.
+- **Training on level-5-only made transfer WORSE**, not better (ρ −0.15 vs −0.08,
+  realistic gain +1.0 vs +3.1). Selecting on the hardest problems overfits harder.
+- **Implication:** the K=1 bottleneck is *selection*, not *search*. This is exactly
+  why the ensemble works (RECORDS.md: MATH ensemble +7.8pp) — majority-voting the
+  top-k is robust to the broken train→test correlation that sinks any single pick.
+
+Caveat: 2 cells, n=96, single σ — directional, not final. The re-run completes the
+4-cell grid; the full axis grid (σ, noise, train-size 16/32/64, stratify) follows.
+
+(appended as cells complete)

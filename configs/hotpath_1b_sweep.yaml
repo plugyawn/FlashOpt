@@ -13,10 +13,12 @@ precision: bfloat16
 
 tensor_parallel_size: 1
 num_engines: 1
-gpu_memory_utilization: 0.85     # 1.5B + base copy ~6GB on a 24GB L4; lots of KV
+# L4 is 22GB. util=0.85 + the ~3GB resident base copy (OUTSIDE this budget) +
+# KV left too little and OOM'd 2/4 cells. 0.55 leaves ~10GB for base+KV+slack.
+gpu_memory_utilization: 0.55
 enforce_eager: true
-max_num_seqs: 256
-max_model_len: 3072              # 2048 gen + prompt headroom for MATH CoT
+max_num_seqs: 128
+max_model_len: 1536              # sweep uses max_tokens=1024 -> 1536 is ample
 
 noise: rademacher
 kernel: auto
