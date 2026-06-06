@@ -217,9 +217,9 @@ def _run_hotpath(config, git_commit, population, sigma, noise, train_samples,
 
 @app.function(gpu="L4", image=e2e_image, timeout=7200)
 def hotpath_1b(git_commit="unknown", population=64, sigma="0.0005", noise="rademacher",
-               train_samples=64, data_args=None, run_name="hp1b"):
+               train_samples=64, data_args=None, run_name="hp1b", config="configs/hotpath_1b.yaml"):
     da = data_args or ["--levels", "4", "5", "--n-train", "64", "--n-test", "192"]
-    return _run_hotpath("configs/hotpath_1b.yaml", git_commit, population, sigma, noise,
+    return _run_hotpath(config, git_commit, population, sigma, noise,
                         train_samples, da, run_name)
 
 
@@ -282,6 +282,28 @@ def main(tier: str = "1", probe_top: int = 0,
          population: int = 0, sigma: str = "", noise: str = "",
          train_samples: int = 0, data_args: str = "", run_name: str = ""):
     import json
+    # --- focused 4-cell 1B K=1 sweep (parallel L4s) ---
+    if tier == "sweep1b":
+        cfg = "configs/hotpath_1b_sweep.yaml"  # test=96, max_tokens=1024 (cheap)
+        commit = _host_commit()
+        cells = [
+            # name        data_args (after make_math500_hard.py)            train_samples
+            ("default",  ["--levels","4","5","--n-train","64","--n-test","96"], 64),
+            ("stratify", ["--stratify","--levels","4","5","--n-train","64","--n-test","96"], 64),
+            ("lvl5train",["--train-levels","5","--levels","4","5","--n-train","64","--n-test","96"], 64),
+            ("train16",  ["--levels","4","5","--n-train","16","--n-test","96"], 16),
+        ]
+        handles = []
+        for name, da, ntr in cells:
+            h = hotpath_1b.spawn(git_commit=commit, population=64, sigma="0.0005",
+                                 noise="rademacher", train_samples=ntr, data_args=da,
+                                 run_name=f"sweep1b_{name}", config=cfg)
+            handles.append((name, h))
+        print(f"spawned {len(handles)} cells in parallel; waiting...")
+        for name, h in handles:
+            res = h.get()
+            _report_hotpath(res, f"sweep1b_{name}")
+        return
     # --- K=1 research hotpath tiers (1B fast / 7B confirm) ---
     if tier in ("hotpath_1b", "hotpath_7b"):
         fn = hotpath_1b if tier == "hotpath_1b" else hotpath_7b
