@@ -260,13 +260,16 @@ def _report_e2e(res2, save_name):
 def _report_hotpath(res, save_name):
     import json
     rec = res.get("record") or {}
+    rc = res.get("returncode")
     print("\n================ HOTPATH RESULT ================")
-    print("config:", res.get("config"), "| returncode:", res.get("returncode"))
+    print("config:", res.get("config"), "| returncode:", rc)
     keys = ["model", "population_size", "train_samples", "test_samples", "noise",
             "sigma_values", "base_test_accuracy", "best_k1_test",
             "k1_selected_by_train", "train_test_spearman", "frac_seeds_beating_base_test"]
     print(json.dumps({k: rec.get(k) for k in keys}, indent=2, default=float))
-    if rec:
+    # Only persist a record from a CLEAN run with a real result — never overwrite
+    # local data with a failed (OOM/crash) cell's stale/empty record.
+    if rc == 0 and rec.get("base_test_accuracy") is not None:
         d = os.path.join(REPO, "hotpath-runs", save_name)
         os.makedirs(d, exist_ok=True)
         with open(os.path.join(d, "record.json"), "w") as f:
@@ -275,6 +278,8 @@ def _report_hotpath(res, save_name):
             for row in res.get("seeds", []):
                 f.write(json.dumps(row) + "\n")
         print(f"wrote hotpath-runs/{save_name}/  (record.json + seeds.jsonl)")
+    else:
+        print(f"!! cell {save_name} FAILED (returncode={rc}) — NOT writing a record")
 
 
 @app.local_entrypoint()
@@ -282,27 +287,44 @@ def main(tier: str = "1", probe_top: int = 0,
          population: int = 0, sigma: str = "", noise: str = "",
          train_samples: int = 0, data_args: str = "", run_name: str = ""):
     import json
-    # --- focused 4-cell 1B K=1 sweep (parallel L4s) ---
-    if tier == "sweep1b":
-        cfg = "configs/hotpath_1b_sweep.yaml"  # test=96, max_tokens=1024 (cheap)
+    # --- 1B K=1 grid sweeps (parallel L4s). Each grid is one tier. ---
+    # cell = (name, data_args, train_samples, sigma, noise)
+    _CFG = "configs/hotpath_1b_sweep.yaml"  # test=96, max_tokens=1024, util=0.55
+    def _base(nt, da_extra=()):
+        return list(da_extra) + ["--levels","4","5","--n-train",str(nt),"--n-test","96"]
+    _GRIDS = {
+        # transfer-design axes: train size, stratify, level-5-only train
+        "sweep1b": [
+            ("default",  _base(64),                      64, "0.0005", "rademacher"),
+            ("stratify", _base(64, ["--stratify"]),      64, "0.0005", "rademacher"),
+            ("lvl5train",_base(64, ["--train-levels","5"]),64,"0.0005","rademacher"),
+            ("train16",  _base(16),                      16, "0.0005", "rademacher"),
+            ("train32",  _base(32),                      32, "0.0005", "rademacher"),
+        ],
+        # perturbation-scheme axes: sigma and noise type (on the default split)
+        "sweepscheme": [
+            ("sig1e4",   _base(64), 64, "0.0001", "rademacher"),
+            ("sig1e3",   _base(64), 64, "0.001",  "rademacher"),
+            ("gauss5e4", _base(64), 64, "0.0005", "gaussian"),
+            ("gauss1e3", _base(64), 64, "0.001",  "gaussian"),
+        ],
+    }
+    if tier in _GRIDS:
         commit = _host_commit()
-        cells = [
-            # name        data_args (after make_math500_hard.py)            train_samples
-            ("default",  ["--levels","4","5","--n-train","64","--n-test","96"], 64),
-            ("stratify", ["--stratify","--levels","4","5","--n-train","64","--n-test","96"], 64),
-            ("lvl5train",["--train-levels","5","--levels","4","5","--n-train","64","--n-test","96"], 64),
-            ("train16",  ["--levels","4","5","--n-train","16","--n-test","96"], 16),
-        ]
         handles = []
-        for name, da, ntr in cells:
-            h = hotpath_1b.spawn(git_commit=commit, population=64, sigma="0.0005",
-                                 noise="rademacher", train_samples=ntr, data_args=da,
-                                 run_name=f"sweep1b_{name}", config=cfg)
+        for name, da, ntr, sg, nz in _GRIDS[tier]:
+            h = hotpath_1b.spawn(git_commit=commit, population=64, sigma=sg, noise=nz,
+                                 train_samples=ntr, data_args=da,
+                                 run_name=f"{tier}_{name}", config=_CFG)
             handles.append((name, h))
-        print(f"spawned {len(handles)} cells in parallel; waiting...")
+        print(f"[{tier}] spawned {len(handles)} cells in parallel; waiting...")
         for name, h in handles:
-            res = h.get()
-            _report_hotpath(res, f"sweep1b_{name}")
+            try:
+                res = h.get()
+            except Exception as e:
+                print(f"!! cell {name} raised: {type(e).__name__}: {e}")
+                continue
+            _report_hotpath(res, f"{tier}_{name}")
         return
     # --- K=1 research hotpath tiers (1B fast / 7B confirm) ---
     if tier in ("hotpath_1b", "hotpath_7b"):
