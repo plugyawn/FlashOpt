@@ -9,6 +9,7 @@ pandas
 pyarrow
 tqdm
 pyyaml
+matplotlib
 # Triton powers the fused dense-Rademacher switch kernel (core/perturb.py). It is
 # Linux+CUDA only and already a vLLM dependency there; pinned explicitly for clarity.
 # Off-GPU (e.g. macOS) the runtime auto-falls back to the pure-torch path.
