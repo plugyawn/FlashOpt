@@ -1,0 +1,15 @@
+{
+  "source_app": "ap-bgP5LRx09gS8QxpbOvwmz9",
+  "n_rows": 48,
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "dataset": "math500 levels 4-5",
+  "train_samples": 64,
+  "test_samples": 96,
+  "base_train_reward_logged": 0.5938,
+  "base_test_accuracy_logged": 54.166666666666664,
+  "base_test_correct_logged": 52,
+  "global_seed": 42,
+  "sigma_values": [
+    0.0005
+  ]
+}

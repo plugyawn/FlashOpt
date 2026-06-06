@@ -91,3 +91,52 @@ Caveat: 2 cells, n=96, single σ — directional, not final. The re-run complete
 4-cell grid; the full axis grid (σ, noise, train-size 16/32/64, stratify) follows.
 
 (appended as cells complete)
+
+### R2 — 7B pairwise merge check from first 48 seeds (Modal L40S/A6000-class, n=96)
+Artifacts:
+- `seed-snapshots/merge7b_l40s_pop48_20260601/` — first 48 deterministic seed rows
+  recovered from Modal app `ap-bgP5LRx09gS8QxpbOvwmz9` after the user stopped the
+  original 128-population run early.
+- `merge-runs/merge7b_l40s_pop48_pairs8_fused_20260601/` — 96 pairwise merge
+  evaluations: 4 pair families x 3 ops x 8 sampled pairs.
+
+Setup: Qwen2.5-7B-Instruct, MATH-500 levels 4-5, 64 train / 96 test, greedy,
+sigma=5e-4, dense Rademacher. Base re-eval matched the original stopped run:
+54.17% (52/96). Best individual seed among first 48: 62.5% (+8.33pp), but the
+seed selected by train reward was only 55.21%.
+
+Merge ops:
+- `avg`: `W0 + 0.5*d1 + 0.5*d2`
+- `normsum`: `W0 + (d1+d2)/sqrt(2)` (RMS-norm preserving)
+- `sum`: `W0 + d1+d2`
+
+| family | op | n | mean acc | best acc | frac > base | frac > parent avg | frac > best parent |
+|--------|----|--:|---------:|---------:|------------:|------------------:|-------------------:|
+| train-top + train-top | avg | 8 | 58.33% | 61.46% | 100% | 62.5% | 37.5% |
+| train-top + train-top | normsum | 8 | 58.46% | 61.46% | 100% | 75.0% | 50.0% |
+| train-top + train-top | sum | 8 | 56.38% | 57.29% | 100% | 12.5% | 0.0% |
+| test-good + test-good | avg | 8 | 58.85% | 63.54% | 100% | 12.5% | 12.5% |
+| test-good + test-good | normsum | 8 | 58.33% | 60.42% | 100% | 0.0% | 0.0% |
+| test-good + test-good | sum | 8 | 57.03% | 59.38% | 87.5% | 0.0% | 0.0% |
+| random + random | avg | 8 | 58.59% | 62.50% | 100% | 75.0% | 50.0% |
+| random + random | normsum | 8 | 56.51% | 60.42% | 62.5% | 25.0% | 12.5% |
+| random + random | sum | 8 | 58.07% | 63.54% | 75.0% | 62.5% | 37.5% |
+| test-bad + test-bad | avg | 8 | 55.60% | 60.42% | 62.5% | 75.0% | 62.5% |
+| test-bad + test-bad | normsum | 8 | 56.77% | 64.58% | 62.5% | 87.5% | 62.5% |
+| test-bad + test-bad | sum | 8 | 55.73% | 59.38% | 50.0% | 62.5% | 62.5% |
+
+Interpretation:
+- Pairwise merges often beat base, so the "composition" hypothesis is not dead.
+- But good+good was not clearly enriched over random+random in this small sample.
+  For `avg`, random+random and test-good+test-good both beat base 100% of the time,
+  with nearly identical means. For `sum`, random+random actually had a higher mean
+  and matched the best test-good+test-good merge.
+- Good+good usually did **not** beat its own parents. Test-good+test-good had
+  0-12.5% beating parent average and 0-12.5% beating the best parent. That means
+  the merge tends to preserve some above-base effect, not add two independently
+  useful task vectors.
+- The likely failure mode of the naive model-merging intuition is that RandOpt
+  seeds are not trained task vectors. They are dense random directions selected
+  through a noisy finite benchmark. Combining two selected random directions
+  changes both direction and effective scale; it can regress toward a generic
+  favorable radius around the base rather than add complementary skill.

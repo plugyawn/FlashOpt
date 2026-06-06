@@ -1,0 +1,194 @@
+{
+  "timestamp": "2026-05-31T23:13:40",
+  "git_commit": "4cb4d4d",
+  "config_name": "merge_7b_l40s",
+  "config_path": "configs/merge_7b_l40s.yaml",
+  "config_sha256": "50c38388030b3c19",
+  "hardware": {
+    "gpu": "NVIDIA L40S",
+    "gpu_count": 1
+  },
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "dataset": "math500",
+  "noise": "rademacher",
+  "sigma_values": [
+    0.0005
+  ],
+  "population_size": 48,
+  "population_source": "precomputed_seed_rows",
+  "logged_base_test_accuracy": 54.166666666666664,
+  "base_train_reward": 0.59375,
+  "base_test_accuracy": 54.166666666666664,
+  "best_k1_test": {
+    "test_acc": 62.5,
+    "seed": 1173749033,
+    "sigma": 0.0005,
+    "train_reward": 0.546875,
+    "delta_vs_logged_base": 8.333333333333336
+  },
+  "k1_selected_by_train": {
+    "test_acc": 55.208333333333336,
+    "seed": 1642822537,
+    "sigma": 0.0005,
+    "train_reward": 0.640625
+  },
+  "merge_config": {
+    "top_n": 12,
+    "pairs_per_family": 8,
+    "ops": [
+      "avg",
+      "normsum",
+      "sum"
+    ]
+  },
+  "merge_summary": {
+    "random_random": {
+      "avg": {
+        "n": 8,
+        "mean_test_acc": 58.59375,
+        "median_test_acc": 57.8125,
+        "best_test_acc": 62.5,
+        "mean_delta_vs_base": 4.427083333333336,
+        "frac_beats_base": 1.0,
+        "frac_beats_parent_avg": 0.75,
+        "frac_beats_best_parent": 0.5,
+        "enrichment_vs_random_frac_beats_base": 1.0
+      },
+      "normsum": {
+        "n": 8,
+        "mean_test_acc": 56.510416666666664,
+        "median_test_acc": 56.25,
+        "best_test_acc": 60.416666666666664,
+        "mean_delta_vs_base": 2.343750000000001,
+        "frac_beats_base": 0.625,
+        "frac_beats_parent_avg": 0.25,
+        "frac_beats_best_parent": 0.125,
+        "enrichment_vs_random_frac_beats_base": 1.0
+      },
+      "sum": {
+        "n": 8,
+        "mean_test_acc": 58.072916666666664,
+        "median_test_acc": 58.333333333333336,
+        "best_test_acc": 63.541666666666664,
+        "mean_delta_vs_base": 3.9062500000000027,
+        "frac_beats_base": 0.75,
+        "frac_beats_parent_avg": 0.625,
+        "frac_beats_best_parent": 0.375,
+        "enrichment_vs_random_frac_beats_base": 1.0
+      }
+    },
+    "test_bad_test_bad": {
+      "avg": {
+        "n": 8,
+        "mean_test_acc": 55.598958333333336,
+        "median_test_acc": 55.208333333333336,
+        "best_test_acc": 60.416666666666664,
+        "mean_delta_vs_base": 1.4322916666666687,
+        "frac_beats_base": 0.625,
+        "frac_beats_parent_avg": 0.75,
+        "frac_beats_best_parent": 0.625,
+        "enrichment_vs_random_frac_beats_base": 0.625
+      },
+      "normsum": {
+        "n": 8,
+        "mean_test_acc": 56.77083333333333,
+        "median_test_acc": 56.25,
+        "best_test_acc": 64.58333333333333,
+        "mean_delta_vs_base": 2.604166666666668,
+        "frac_beats_base": 0.625,
+        "frac_beats_parent_avg": 0.875,
+        "frac_beats_best_parent": 0.625,
+        "enrichment_vs_random_frac_beats_base": 1.0
+      },
+      "sum": {
+        "n": 8,
+        "mean_test_acc": 55.729166666666664,
+        "median_test_acc": 55.729166666666664,
+        "best_test_acc": 59.375,
+        "mean_delta_vs_base": 1.5625000000000027,
+        "frac_beats_base": 0.5,
+        "frac_beats_parent_avg": 0.625,
+        "frac_beats_best_parent": 0.625,
+        "enrichment_vs_random_frac_beats_base": 0.6666666666666666
+      }
+    },
+    "test_good_test_good": {
+      "avg": {
+        "n": 8,
+        "mean_test_acc": 58.854166666666664,
+        "median_test_acc": 58.85416666666667,
+        "best_test_acc": 63.541666666666664,
+        "mean_delta_vs_base": 4.687500000000003,
+        "frac_beats_base": 1.0,
+        "frac_beats_parent_avg": 0.125,
+        "frac_beats_best_parent": 0.125,
+        "enrichment_vs_random_frac_beats_base": 1.0
+      },
+      "normsum": {
+        "n": 8,
+        "mean_test_acc": 58.333333333333336,
+        "median_test_acc": 58.333333333333336,
+        "best_test_acc": 60.416666666666664,
+        "mean_delta_vs_base": 4.166666666666669,
+        "frac_beats_base": 1.0,
+        "frac_beats_parent_avg": 0.0,
+        "frac_beats_best_parent": 0.0,
+        "enrichment_vs_random_frac_beats_base": 1.6
+      },
+      "sum": {
+        "n": 8,
+        "mean_test_acc": 57.03125,
+        "median_test_acc": 57.291666666666664,
+        "best_test_acc": 59.375,
+        "mean_delta_vs_base": 2.8645833333333357,
+        "frac_beats_base": 0.875,
+        "frac_beats_parent_avg": 0.0,
+        "frac_beats_best_parent": 0.0,
+        "enrichment_vs_random_frac_beats_base": 1.1666666666666667
+      }
+    },
+    "train_top_train_top": {
+      "avg": {
+        "n": 8,
+        "mean_test_acc": 58.333333333333336,
+        "median_test_acc": 58.333333333333336,
+        "best_test_acc": 61.458333333333336,
+        "mean_delta_vs_base": 4.16666666666667,
+        "frac_beats_base": 1.0,
+        "frac_beats_parent_avg": 0.625,
+        "frac_beats_best_parent": 0.375,
+        "enrichment_vs_random_frac_beats_base": 1.0
+      },
+      "normsum": {
+        "n": 8,
+        "mean_test_acc": 58.463541666666664,
+        "median_test_acc": 58.85416666666667,
+        "best_test_acc": 61.458333333333336,
+        "mean_delta_vs_base": 4.296875000000003,
+        "frac_beats_base": 1.0,
+        "frac_beats_parent_avg": 0.75,
+        "frac_beats_best_parent": 0.5,
+        "enrichment_vs_random_frac_beats_base": 1.6
+      },
+      "sum": {
+        "n": 8,
+        "mean_test_acc": 56.380208333333336,
+        "median_test_acc": 56.25,
+        "best_test_acc": 57.291666666666664,
+        "mean_delta_vs_base": 2.2135416666666687,
+        "frac_beats_base": 1.0,
+        "frac_beats_parent_avg": 0.125,
+        "frac_beats_best_parent": 0.0,
+        "enrichment_vs_random_frac_beats_base": 1.3333333333333333
+      }
+    }
+  },
+  "timings_s": {
+    "launch": 118.64358618399999,
+    "base_eval": 57.95291129900002,
+    "merge_eval": 2847.9496496079996,
+    "total": 3032.0263243779996
+  },
+  "seed_rows_jsonl": "seeds.jsonl",
+  "merges_jsonl": "merges.jsonl"
+}
