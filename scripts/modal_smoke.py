@@ -19,7 +19,8 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Exclude the big/irrelevant trees from the code mount.
 IGNORE = [
     ".git", ".git/**", ".venv", ".venv/**", "baselines", "baselines/**",
-    "speedrun-runs", "speedrun-runs/**", "**/__pycache__", "**/__pycache__/**",
+    "speedrun-runs", "speedrun-runs/**", "merge-runs", "merge-runs/**",
+    "**/__pycache__", "**/__pycache__/**",
     "env.local", "*.pyc", "data/**",
 ]
 
@@ -231,6 +232,93 @@ def hotpath_7b(git_commit="unknown", population=128, sigma="0.0005", noise="rade
                         train_samples, da, run_name)
 
 
+def _run_merge(config, git_commit, population, sigma, merge_pairs, merge_top_n,
+               merge_ops, data_args, run_name):
+    """Prep MATH-500, run merge_run.py, and return record + jsonl artifacts."""
+    import os, sys, subprocess, glob, json
+    os.chdir("/root/RandOpt")
+    env = dict(os.environ, PYTHONPATH="/root/RandOpt", RANDOPT_GIT_COMMIT=git_commit,
+               PYTHONUNBUFFERED="1")
+    subprocess.run([sys.executable, "scripts/make_math500_hard.py"] + data_args, check=True, env=env)
+    cmd = [sys.executable, "merge_run.py", "--config", config, "--run-name", run_name]
+    if population: cmd += ["--population", str(population)]
+    if sigma: cmd += ["--sigma", str(sigma)]
+    if merge_pairs: cmd += ["--merge-pairs", str(merge_pairs)]
+    if merge_top_n: cmd += ["--merge-top-n", str(merge_top_n)]
+    if merge_ops: cmd += ["--merge-ops", str(merge_ops)]
+    r = subprocess.run(cmd, env=env)
+    recs = sorted(glob.glob("merge-runs/*/record.json"), key=os.path.getmtime)
+    rec, seeds, merges = {}, [], []
+    if recs:
+        rd = os.path.dirname(recs[-1])
+        rec = json.load(open(recs[-1]))
+        sp = os.path.join(rd, "seeds.jsonl")
+        mp = os.path.join(rd, "merges.jsonl")
+        if os.path.exists(sp):
+            seeds = [json.loads(l) for l in open(sp) if l.strip()]
+        if os.path.exists(mp):
+            merges = [json.loads(l) for l in open(mp) if l.strip()]
+    return {"tier": "merge", "config": config, "returncode": r.returncode,
+            "run_name": run_name, "record": rec, "seeds": seeds, "merges": merges}
+
+
+def _run_merge_from_rows(config, git_commit, seed_rows, logged_base_test_acc,
+                         merge_pairs, merge_top_n, merge_ops, data_args, run_name):
+    """Prep MATH-500, run merge_from_rows.py, and return record + jsonl artifacts."""
+    import os, sys, subprocess, glob, json
+    os.chdir("/root/RandOpt")
+    env = dict(os.environ, PYTHONPATH="/root/RandOpt", RANDOPT_GIT_COMMIT=git_commit,
+               PYTHONUNBUFFERED="1")
+    subprocess.run([sys.executable, "scripts/make_math500_hard.py"] + data_args, check=True, env=env)
+    seed_path = "/tmp/randopt_seed_rows.jsonl"
+    with open(seed_path, "w") as f:
+        for row in seed_rows:
+            f.write(json.dumps(row) + "\n")
+    cmd = [sys.executable, "merge_from_rows.py", "--config", config,
+           "--seed-rows-jsonl", seed_path, "--run-name", run_name]
+    if logged_base_test_acc is not None:
+        cmd += ["--logged-base-test-acc", str(logged_base_test_acc)]
+    if merge_pairs: cmd += ["--merge-pairs", str(merge_pairs)]
+    if merge_top_n: cmd += ["--merge-top-n", str(merge_top_n)]
+    if merge_ops: cmd += ["--merge-ops", str(merge_ops)]
+    r = subprocess.run(cmd, env=env)
+    recs = sorted(glob.glob("merge-runs/*/record.json"), key=os.path.getmtime)
+    rec, seeds, merges = {}, [], []
+    if recs:
+        rd = os.path.dirname(recs[-1])
+        rec = json.load(open(recs[-1]))
+        sp = os.path.join(rd, "seeds.jsonl")
+        mp = os.path.join(rd, "merges.jsonl")
+        if os.path.exists(sp):
+            seeds = [json.loads(l) for l in open(sp) if l.strip()]
+        if os.path.exists(mp):
+            merges = [json.loads(l) for l in open(mp) if l.strip()]
+    return {"tier": "merge_from_rows", "config": config, "returncode": r.returncode,
+            "run_name": run_name, "record": rec, "seeds": seeds, "merges": merges}
+
+
+@app.function(gpu=["L40S", "RTX-PRO-6000", "A100-40GB", "A100", "H100"],
+              image=e2e_image, timeout=21600)
+def merge_7b_l40s(git_commit="unknown", population=128, sigma="0.0005",
+                  merge_pairs=24, merge_top_n=16, merge_ops="avg,normsum,sum",
+                  data_args=None, run_name="merge7b_l40s"):
+    da = data_args or ["--levels", "4", "5", "--n-train", "64", "--n-test", "96"]
+    return _run_merge("configs/merge_7b_l40s.yaml", git_commit, population, sigma,
+                      merge_pairs, merge_top_n, merge_ops, da, run_name)
+
+
+@app.function(gpu=["L40S", "RTX-PRO-6000", "A100-40GB", "A100", "H100"],
+              image=e2e_image, timeout=14400)
+def merge_from_rows_7b_l40s(git_commit="unknown", seed_rows=None,
+                            logged_base_test_acc=None, merge_pairs=8,
+                            merge_top_n=12, merge_ops="avg,normsum,sum",
+                            data_args=None, run_name="merge7b_from_rows"):
+    da = data_args or ["--levels", "4", "5", "--n-train", "64", "--n-test", "96"]
+    return _run_merge_from_rows("configs/merge_7b_l40s.yaml", git_commit, seed_rows or [],
+                                logged_base_test_acc, merge_pairs, merge_top_n,
+                                merge_ops, da, run_name)
+
+
 def _host_commit():
     import subprocess
     try:
@@ -282,10 +370,39 @@ def _report_hotpath(res, save_name):
         print(f"!! cell {save_name} FAILED (returncode={rc}) — NOT writing a record")
 
 
+def _report_merge(res, save_name):
+    import json
+    rec = res.get("record") or {}
+    rc = res.get("returncode")
+    print("\n================ MERGE RESULT ================")
+    print("config:", res.get("config"), "| returncode:", rc)
+    keys = ["model", "population_size", "train_samples", "test_samples", "noise",
+            "sigma_values", "base_test_accuracy", "best_k1_test",
+            "k1_selected_by_train", "train_test_spearman",
+            "frac_seeds_beating_base_test", "ensemble_results", "merge_summary"]
+    print(json.dumps({k: rec.get(k) for k in keys}, indent=2, default=float))
+    if rc == 0 and rec.get("base_test_accuracy") is not None:
+        d = os.path.join(REPO, "merge-runs", save_name)
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "record.json"), "w") as f:
+            json.dump(rec, f, indent=2)
+        with open(os.path.join(d, "seeds.jsonl"), "w") as f:
+            for row in res.get("seeds", []):
+                f.write(json.dumps(row) + "\n")
+        with open(os.path.join(d, "merges.jsonl"), "w") as f:
+            for row in res.get("merges", []):
+                f.write(json.dumps(row) + "\n")
+        print(f"wrote merge-runs/{save_name}/  (record.json + jsonl artifacts)")
+    else:
+        print(f"!! merge run {save_name} FAILED (returncode={rc}) — NOT writing a record")
+
+
 @app.local_entrypoint()
 def main(tier: str = "1", probe_top: int = 0,
          population: int = 0, sigma: str = "", noise: str = "",
-         train_samples: int = 0, data_args: str = "", run_name: str = ""):
+         train_samples: int = 0, data_args: str = "", run_name: str = "",
+         merge_pairs: int = 0, merge_top_n: int = 0, merge_ops: str = "",
+         seed_rows_path: str = "", logged_base_test_acc: float = 0.0):
     import json
     # --- 1B K=1 grid sweeps (parallel L4s). Each grid is one tier. ---
     # cell = (name, data_args, train_samples, sigma, noise)
@@ -339,6 +456,36 @@ def main(tier: str = "1", probe_top: int = 0,
         kw["run_name"] = rn
         res = fn.remote(**kw)
         _report_hotpath(res, rn)
+        return
+    if tier in ("merge", "merge_7b_l40s"):
+        kw = dict(git_commit=_host_commit())
+        if population: kw["population"] = population
+        if sigma: kw["sigma"] = sigma
+        if data_args: kw["data_args"] = data_args.split()
+        if merge_pairs: kw["merge_pairs"] = merge_pairs
+        if merge_top_n: kw["merge_top_n"] = merge_top_n
+        if merge_ops: kw["merge_ops"] = merge_ops
+        rn = run_name or "merge7b_l40s"
+        kw["run_name"] = rn
+        res = merge_7b_l40s.remote(**kw)
+        _report_merge(res, rn)
+        return
+    if tier in ("merge_from_rows", "merge_from_rows_7b_l40s"):
+        import json
+        if not seed_rows_path:
+            raise ValueError("--seed-rows-path is required for tier=merge_from_rows")
+        seed_rows = [json.loads(l) for l in open(seed_rows_path) if l.strip()]
+        kw = dict(git_commit=_host_commit(), seed_rows=seed_rows)
+        if logged_base_test_acc:
+            kw["logged_base_test_acc"] = logged_base_test_acc
+        if data_args: kw["data_args"] = data_args.split()
+        if merge_pairs: kw["merge_pairs"] = merge_pairs
+        if merge_top_n: kw["merge_top_n"] = merge_top_n
+        if merge_ops: kw["merge_ops"] = merge_ops
+        rn = run_name or "merge7b_from_rows"
+        kw["run_name"] = rn
+        res = merge_from_rows_7b_l40s.remote(**kw)
+        _report_merge(res, rn)
         return
     if tier == "throughput":
         res = throughput.remote()

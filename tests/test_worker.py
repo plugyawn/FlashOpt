@@ -119,6 +119,21 @@ def test_apply_averaged_perturbations():
     assert torch.equal(model.visual.weight.data, base["visual.weight"])  # skipped
 
 
+def test_apply_linear_combined_perturbations_raw_coefficients():
+    w, model, base = _make_worker()
+    seeds_sigmas = [(11, 1e-2), (22, 2e-2)]
+    coeffs = [1.0, -0.25]
+    w.apply_linear_combined_perturbations(seeds_sigmas, coeffs)
+    plan = P.iter_perturb_params(model.named_parameters(), w._should_perturb)
+    for name, p, off in plan:
+        acc = torch.zeros(p.numel(), dtype=torch.float32)
+        for (seed, sigma), coeff in zip(seeds_sigmas, coeffs):
+            acc += coeff * sigma * P.rademacher_signs(seed, off, p.numel(), p.device)
+        exp = (base[name].to(torch.float32) + acc.reshape(p.shape)).to(p.dtype)
+        assert torch.allclose(p.data, exp, atol=1e-6), name
+    assert torch.equal(model.visual.weight.data, base["visual.weight"])
+
+
 def test_switch_to_seed_matches_reconstruct_fp32():
     w, model, base = _make_worker()
     sigma = 1e-3

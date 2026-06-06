@@ -1,0 +1,37 @@
+# =============================================================================
+# RandOpt merge check — Qwen2.5-7B-Instruct on one A6000-class Modal GPU.
+#
+# L40S has 48 GB like an RTX A6000-class card. The resident base-weight copy
+# lives outside vLLM's memory budget, so util is deliberately conservative.
+# =============================================================================
+name: merge_7b_l40s
+
+model: Qwen/Qwen2.5-7B-Instruct
+precision: bfloat16
+
+tensor_parallel_size: 1
+num_engines: 1
+gpu_memory_utilization: 0.55
+enforce_eager: true
+max_num_seqs: 128
+max_model_len: 1536
+
+noise: rademacher
+kernel: auto
+
+dataset: math500
+train_data_path: data/math-500-hard/train.jsonl
+test_data_path: data/math-500-hard/test.jsonl
+train_samples: 64
+test_samples: 96
+max_tokens: 1024
+population_size: 128
+sigma_values: [0.0005]
+global_seed: 42
+
+top_k_ratios: [0.04, 0.10]
+
+merge:
+  top_n: 16
+  pairs_per_family: 24
+  ops: [avg, normsum, sum]

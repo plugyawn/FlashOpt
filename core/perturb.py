@@ -159,6 +159,29 @@ try:  # pragma: no cover - exercised on GPU only
         val = live + sigma * (sign_t - sign_f)
         tl.store(live_ptr + idx, val.to(live_ptr.dtype.element_ty), mask=mask)
 
+    @triton.jit
+    def _linear2_reconstruct_kernel(out_ptr, base_ptr, seed1, scale1, seed2, scale2,
+                                    offset, n, BLOCK: tl.constexpr):
+        pid = tl.program_id(0)
+        idx = pid * BLOCK + tl.arange(0, BLOCK)
+        mask = idx < n
+        pos = offset + idx.to(tl.int64)
+        lo = (pos & 0xFFFFFFFF).to(tl.uint32)
+        hi = ((pos >> 32) & 0xFFFFFFFF).to(tl.uint32)
+        h0 = _tl_fmix32(hi ^ _tl_fmix32(lo))
+
+        s1 = tl.full((), seed1, tl.uint32)
+        h1 = _tl_fmix32(s1 ^ h0)
+        sign1 = 1.0 - 2.0 * (h1 & 1).to(tl.float32)
+
+        s2 = tl.full((), seed2, tl.uint32)
+        h2 = _tl_fmix32(s2 ^ h0)
+        sign2 = 1.0 - 2.0 * (h2 & 1).to(tl.float32)
+
+        base = tl.load(base_ptr + idx, mask=mask, other=0.0).to(tl.float32)
+        val = base + scale1 * sign1 + scale2 * sign2
+        tl.store(out_ptr + idx, val.to(out_ptr.dtype.element_ty), mask=mask)
+
 except Exception:  # ImportError or any Triton init failure
     _HAS_TRITON = False
     triton = None
@@ -233,6 +256,39 @@ def reconstruct_into(
     # torch reference / fallback (materialises signs; compute in fp32 then cast)
     signs = rademacher_signs(seed, offset, n, out.device, dtype=torch.float32).reshape(out.shape)
     val = base.to(torch.float32) + float(sigma) * signs
+    out.copy_(val.to(out.dtype))
+
+
+def reconstruct_linear2_into(
+    out: torch.Tensor,
+    base: torch.Tensor,
+    seed1: int,
+    scale1: float,
+    seed2: int,
+    scale2: float,
+    offset: int,
+    *,
+    kernel: str | None = None,
+) -> None:
+    """Write ``out = base + scale1*R(seed1) + scale2*R(seed2)``.
+
+    This is the memory-efficient pairwise merge primitive. The Triton path
+    computes both signs inline and materializes no full-size sign tensors.
+    """
+    n = out.numel()
+    backend = resolve_backend(out, kernel)
+    if backend == "triton":
+        BLOCK = 1024
+        _linear2_reconstruct_kernel[(_grid_blocks(n, BLOCK),)](
+            out.view(-1), base.view(-1),
+            int(seed1) & _MASK32, float(scale1),
+            int(seed2) & _MASK32, float(scale2),
+            int(offset), n, BLOCK=BLOCK,
+        )
+        return
+    signs1 = rademacher_signs(seed1, offset, n, out.device, dtype=torch.float32).reshape(out.shape)
+    signs2 = rademacher_signs(seed2, offset, n, out.device, dtype=torch.float32).reshape(out.shape)
+    val = base.to(torch.float32) + float(scale1) * signs1 + float(scale2) * signs2
     out.copy_(val.to(out.dtype))
 
 
@@ -317,6 +373,25 @@ def reconstruct_model_from_base(
     plan = iter_perturb_params(named_params, should_perturb)
     for name, p, off in plan:
         reconstruct_into(p.data, base_lookup(name), seed, sigma, off, noise=noise, kernel=kernel)
+    return len(plan)
+
+
+def reconstruct_model_linear2_from_base(
+    named_params: Iterable[Tuple[str, torch.Tensor]],
+    base_lookup: Callable[[str], torch.Tensor],
+    seed1: int,
+    scale1: float,
+    seed2: int,
+    scale2: float,
+    should_perturb: Callable[[str], bool],
+    *,
+    kernel: str | None = None,
+) -> int:
+    """Set every perturbable param to a two-seed linear merge from base."""
+    plan = iter_perturb_params(named_params, should_perturb)
+    for name, p, off in plan:
+        reconstruct_linear2_into(
+            p.data, base_lookup(name), seed1, scale1, seed2, scale2, off, kernel=kernel)
     return len(plan)
 
 

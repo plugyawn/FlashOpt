@@ -105,6 +105,8 @@ class WorkerExtension:
             if getattr(self, "_noise", "rademacher") == "rademacher":
                 perturb.switch_inplace(buf, 0, 1, 1e-3, 0,
                                        kernel=getattr(self, "_kernel", None))
+                perturb.reconstruct_linear2_into(buf, base, 0, 5e-4, 1, 5e-4, 0,
+                                                 kernel=getattr(self, "_kernel", None))
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
         except Exception as e:  # warmup is best-effort; never fail launch on it
@@ -342,6 +344,63 @@ class WorkerExtension:
                 signs = perturb.rademacher_signs(
                     int(seed), off, p.numel(), p.device, torch.float32).reshape(p.shape)
                 acc.add_(signs, alpha=float(weight) * float(sigma))
+            p.data.copy_((base.to(torch.float32) + acc).to(p.dtype))
+            del acc
+
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        gc.collect()
+        return True
+
+    def apply_linear_combined_perturbations(self, seeds_sigmas, coeffs):
+        """
+        Apply an unnormalized linear combination of perturbation deltas.
+
+        The live model becomes:
+
+            W = W_base + sum_i coeff_i * sigma_i * R(seed_i)
+
+        This is intentionally different from apply_averaged_perturbations:
+        callers can test raw sums, norm-preserving sums, differences, and other
+        weight-space merge operations without implicit coefficient normalization.
+        """
+        if not hasattr(self, '_base_weights'):
+            raise RuntimeError("Must call store_base_weights first")
+        if len(seeds_sigmas) != len(coeffs):
+            raise ValueError("seeds_sigmas and coeffs must have the same length")
+        if getattr(self, "_noise", "rademacher") != "rademacher":
+            raise ValueError("linear perturbation merges currently support rademacher noise only")
+
+        if len(seeds_sigmas) == 2:
+            for name, p in self.model_runner.model.named_parameters():
+                if not self._should_perturb(name):
+                    p.data.copy_(self._base_weights[name])
+            (seed1, sigma1), (seed2, sigma2) = seeds_sigmas
+            scale1 = float(coeffs[0]) * float(sigma1)
+            scale2 = float(coeffs[1]) * float(sigma2)
+            perturb.reconstruct_model_linear2_from_base(
+                self.model_runner.model.named_parameters(),
+                lambda n: self._base_weights[n],
+                int(seed1), scale1, int(seed2), scale2, self._should_perturb,
+                kernel=getattr(self, "_kernel", None),
+            )
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            return True
+
+        for name, p in self.model_runner.model.named_parameters():
+            if not self._should_perturb(name):
+                p.data.copy_(self._base_weights[name])
+
+        plan = perturb.iter_perturb_params(
+            self.model_runner.model.named_parameters(), self._should_perturb)
+        for name, p, off in plan:
+            base = self._base_weights[name]
+            acc = torch.zeros_like(p.data, dtype=torch.float32)
+            for (seed, sigma), coeff in zip(seeds_sigmas, coeffs):
+                signs = perturb.rademacher_signs(
+                    int(seed), off, p.numel(), p.device, torch.float32).reshape(p.shape)
+                acc.add_(signs, alpha=float(coeff) * float(sigma))
             p.data.copy_((base.to(torch.float32) + acc).to(p.dtype))
             del acc
 
